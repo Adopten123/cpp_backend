@@ -178,7 +178,7 @@ private:
         std::size_t ext_start = path.find_last_of('.', path.size());
         std::string_view type = "application/octet-stream"sv;
         if (ext_start != path.npos) {
-            auto it = mime_types.find(extension);
+            auto it = mime_types.find(path.substr(ext_start + 1, path.size() - ext_start + 1));
             if (it != mime_types.end()) {
                 content_type = it->second;
             }
