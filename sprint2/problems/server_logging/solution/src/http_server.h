@@ -34,7 +34,10 @@ namespace http_server {
 
         ~SessionBase() = default;
 
-        explicit SessionBase(tcp::socket&& socket);
+        explicit SessionBase(tcp::socket&& socket)
+            : address_(socket.remote_endpoint().address())
+            , stream_(std::move(socket)) {
+        }
 
         template <typename Body, typename Fields>
         void Write(http::response<Body, Fields>&& response) {
@@ -54,13 +57,40 @@ namespace http_server {
         beast::flat_buffer buffer_;
         HttpRequest request_;
 
-        void Read();
+        void Read() {
+            using namespace std::literals;
+            // Очищаем запрос от прежнего значения (метод Read может быть вызван несколько раз)
+            request_ = {};
+            stream_.expires_after(30s);
+            // Считываем request_ из stream_, используя buffer_ для хранения считанных данных
+            http::async_read(stream_, buffer_, request_,
+                // По окончании операции будет вызван метод OnRead
+                beast::bind_front_handler(&SessionBase::OnRead, GetSharedThis()));
+        }
 
-        void OnRead(beast::error_code ec, [[maybe_unused]] std::size_t bytes_read);
+        void OnRead(beast::error_code ec, [[maybe_unused]] std::size_t bytes_read) {
+            using namespace std::literals;
+            if (ec == http::error::end_of_stream)
+                return Close(); // Нормальная ситуация - клиент закрыл соединение
+            if (ec)
+                return ReportError(ec, "read"sv);
+            HandleRequest(std::move(request_));
+        }
 
-        void Close();
+        void Close() {
+            beast::error_code ec;
+            stream_.socket().shutdown(tcp::socket::shutdown_send, ec);
+        }
 
-        void OnWrite(bool close, beast::error_code ec, [[maybe_unused]] std::size_t bytes_written);
+        void OnWrite(bool close, beast::error_code ec, [[maybe_unused]] std::size_t bytes_written) {
+            if (ec)
+                return ReportError(ec, "write"sv);
+
+            if (close)
+                return Close();
+
+            Read();
+        }
 
         // Обработку запроса делегируем подклассу
         virtual void HandleRequest(HttpRequest&& request) = 0;
