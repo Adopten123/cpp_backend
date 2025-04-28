@@ -137,7 +137,6 @@ RequestHandler::ExtensionMapperType::ExtensionMapperType() {
 std::string_view RequestHandler::ExtensionMapperType::operator()(std::string_view extension) const {
     if (map_.contains(extension))
         return map_.at(extension);
-
     return ContentType::UNKNOWN;
 }
 
