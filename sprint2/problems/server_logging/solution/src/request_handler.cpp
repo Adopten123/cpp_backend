@@ -92,53 +92,54 @@ std::string_view ContentType::FromExtension(std::string_view extension) {
 }
 
 RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target) const {
-    if (target.empty()) return BAD_REQUEST;
+    if (target.empty())
+        return BAD_REQUEST;
 
     auto decoded = DecodeURL(target);
     auto parts = SplitRequest(decoded);
 
+    // Проверка API-запросов
     if (parts.size() >= 3 &&
         parts[0] == RestApiLiterals::API &&
         parts[1] == RestApiLiterals::VERSION_1 &&
         parts[2] == RestApiLiterals::MAPS) {
-        return parts.size() == 3 ? API_MAPS :
-               parts.size() == 4 ? API_MAP : BAD_REQUEST;
+        return (parts.size() == 3) ? API_MAPS :
+               (parts.size() == 4) ? API_MAP : BAD_REQUEST;
+        }
+
+    // Проверка файловых запросов
+    auto full_path = fs::weakly_canonical(root_path_ / decoded);
+    if (fs::exists(full_path) && fs::is_regular_file(full_path)) {
+        return FILE;
     }
 
-    auto full_path = fs::weakly_canonical(root_path_ / target);
-    return fs::exists(full_path) ? FILE : BAD_REQUEST;
+    return BAD_REQUEST;
 }
 
 std::string RequestHandler::DecodeURL(std::string_view url) const {
-    std::vector<char> text;
-    text.reserve(url.length());
-    for (size_t i = 0; i < url.length(); ++i) {
+    std::string result;
+    result.reserve(url.size());
+    for (size_t i = 0; i < url.size(); ++i) {
         if (url[i] == '%') {
-            if (i + 2 < url.length()) {
-                char hex1 = url[i + 1];
-                char hex2 = url[i + 2];
-
-                if (isxdigit(hex1) and isxdigit(hex2)) {
-                    int code = std::stoi(std::string() + hex1 + hex2, nullptr, 16);
-                    text.emplace_back(static_cast<char>(code));
+            if (i + 2 < url.size()) {
+                int hi = HexToInt(url[i+1]);
+                int lo = HexToInt(url[i+2]);
+                if (hi == -1 || lo == -1) {
+                    result += url[i];
+                } else {
+                    result += static_cast<char>((hi << 4) | lo);
                     i += 2;
                 }
-                else {
-                    text.emplace_back('%');
-                }
+            } else {
+                result += url[i];
             }
-            else {
-                text.emplace_back('%');
-            }
-        }
-        else if (url[i] == '+') {
-            text.emplace_back(' ');
-        }
-        else {
-            text.emplace_back(url[i]);
+        } else if (url[i] == '+') {
+            result += ' ';
+        } else {
+            result += url[i];
         }
     }
-    return std::string(text.data(), text.size());
+    return result;
 }
 
 int RequestHandler::HexToInt(char c) {

@@ -137,13 +137,11 @@ private:
 
     template<typename Send>
     ResponseData SendFileResponseOr404(std::string_view path, Send&& send, unsigned http_version) const {
-        auto full_path = fs::weakly_canonical(root_path_ / path);
+        auto decoded_path = DecodeURL(path);
+        auto full_path = fs::weakly_canonical(root_path_ / decoded_path);
+
         if (!fs::exists(full_path) || !fs::is_regular_file(full_path)) {
-            SendResponse(http::status::not_found,
-                        FILE_NOT_FOUND_HTTP_BODY,
-                        http_version,
-                        std::move(send),
-                        ContentType::TEXT_PLAIN);
+            SendResponse(http::status::not_found, FILE_NOT_FOUND_HTTP_BODY, http_version, std::move(send), ContentType::TEXT_PLAIN);
             return {http::status::not_found, ContentType::TEXT_PLAIN};
         }
 
