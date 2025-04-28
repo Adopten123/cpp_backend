@@ -65,6 +65,12 @@ public:
         http::status code;
         std::string_view content_type;
     };
+    enum RequestType {
+        API_MAP,
+        API_MAPS,
+        FILE,
+        BAD_REQUEST
+    };
 
     template <typename Body, typename Allocator, typename Send>
     ResponseData operator()(http::request<Body, http::basic_fields<Allocator>>&& req, Send&& send) {
@@ -109,8 +115,6 @@ public:
     }
 
 private:
-    enum RequestType { API_MAP, API_MAPS, FILE, BAD_REQUEST };
-
     model::Game& game_;
     const fs::path root_path_;
 
