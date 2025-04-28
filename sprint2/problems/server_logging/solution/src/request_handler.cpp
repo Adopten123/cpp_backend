@@ -80,7 +80,7 @@ json::array RequestHandler::ProcessMapsRequestBody() const {
 }
 
 RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target) const {
-    auto parts = SplitRequest(target.substr(1));
+    auto parts = SplitRequest(target.substr(1, target.length() - 1));
     if (!parts.empty() && parts[0] == RestApiLiterals::API) {
         if (parts.size() >= 3 &&
             parts[1] == RestApiLiterals::VERSION_1 &&
