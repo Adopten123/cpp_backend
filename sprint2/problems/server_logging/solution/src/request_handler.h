@@ -99,7 +99,8 @@ public:
 
     template <typename Body, typename Allocator, typename Send>
     ResponseData operator()(http::request<Body, http::basic_fields<Allocator>>&& req, Send&& send) {
-        std::string_view path(DecodeURL(req.target()));
+        auto string_path = DecodeURL(req.target());
+        std::string_view path(string_path);
 
         switch(CheckRequest(path)) {
         case RequestType::API_MAPS:

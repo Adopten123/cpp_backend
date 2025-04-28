@@ -80,11 +80,7 @@ json::array RequestHandler::ProcessMapsRequestBody() const {
 }
 
 RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target) const {
-    if (target.empty()) {
-        return RequestType::BAD_REQUEST;
-    }
-    auto decoded_target = DecodeURL(target);
-    auto request = SplitRequest(decoded_target.substr(1));
+    auto request = SplitRequest(target.substr(1, target.length() - 1));
 
     if (request.size() > 2 and request[0] == RestApiLiterals::API
         and request[1] == RestApiLiterals::VERSION_1
