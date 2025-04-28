@@ -30,6 +30,17 @@ struct ContentType {
     constexpr static std::string_view TEXT_HTML = "text/html"sv;
     constexpr static std::string_view APP_JSON = "application/json"sv;
     constexpr static std::string_view TEXT_PLAIN = "text/plain"sv;
+    constexpr static std::string_view TEXT_JAVASCRIPT = "text/javascript"sv;
+    constexpr static std::string_view APP_XML = "application/xml"sv;
+    constexpr static std::string_view PNG = "image/png"sv;
+    constexpr static std::string_view JPEG = "image/jpeg"sv;
+    constexpr static std::string_view GIF = "image/gif"sv;
+    constexpr static std::string_view BMP = "image/bmp"sv;
+    constexpr static std::string_view ICO = "image/vnd.microsoft.icon"sv;
+    constexpr static std::string_view TIFF = "image/tiff"sv;
+    constexpr static std::string_view SVG = "image/svg+xml"sv;
+    constexpr static std::string_view MP3 = "audio/mpeg"sv;
+    constexpr static std::string_view UNKNOWN = "application/octet-stream"sv;
 };
 
 struct FileExtensions {
