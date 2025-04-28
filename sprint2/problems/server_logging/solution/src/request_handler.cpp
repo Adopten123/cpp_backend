@@ -84,15 +84,15 @@ RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target
     if (parts.size() >= 3
         and parts[1] == RestApiLiterals::VERSION_1
         and parts[2] == RestApiLiterals::MAPS) {
-            if (request.size() == 3)
+            if (parts.size() == 3)
                 return RequestHandler::RequestType::API_MAPS;
-            else if (request.size() == 4)
+            else if (parts.size() == 4)
                 return RequestHandler::RequestType::API_MAP;
             else
                 return RequestHandler::RequestType::BAD_REQUEST;
     }
 
-    if (request[0] == RestApiLiterals::API)
+    if (parts[0] == RestApiLiterals::API)
         return RequestHandler::RequestType::BAD_REQUEST;
 
     try {
