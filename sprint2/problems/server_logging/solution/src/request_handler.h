@@ -23,6 +23,7 @@ namespace json = boost::json;
 namespace http = beast::http;
 namespace fs = std::filesystem;
 namespace sys = boost::system;
+namespace logging = boost::log;
 
 struct ContentType {
     ContentType() = delete;
