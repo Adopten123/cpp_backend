@@ -80,35 +80,36 @@ json::array RequestHandler::ProcessMapsRequestBody() const {
 }
 
 RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target) const {
-    if (auto parts = SplitRequest(target.substr(1, target.length() - 1)); !parts.empty()) {
-        if (parts.size() >= 3 and
-            parts[0] == RestApiLiterals::API and
-            parts[1] == RestApiLiterals::VERSION_1 and
-            parts[2] == RestApiLiterals::MAPS)
+    auto parts = SplitRequest(target.substr(1));
+
+    // Проверка API-запросов
+    if (!parts.empty() && parts[0] == RestApiLiterals::API) {
+        if (parts.size() >= 3
+            and parts[1] == RestApiLiterals::VERSION_1
+            and parts[2] == RestApiLiterals::MAPS)
         {
-            return parts.size() == 3 ? RequestType::API_MAPS :
-                   parts.size() == 4 ? RequestType::API_MAP :
+            return (parts.size() == 3) ? RequestType::API_MAPS :
+                   (parts.size() == 4) ? RequestType::API_MAP :
                    RequestType::BAD_REQUEST;
         }
-        if (parts[0] == RestApiLiterals::API) {
-            return RequestType::BAD_REQUEST;
-        }
+
+        return RequestType::BAD_REQUEST;
     }
 
     try {
-        const auto requested_path = fs::weakly_canonical(root_path_ / target);
+        const auto full_path = fs::weakly_canonical(root_path_ / target);
         const auto root_canonical = fs::weakly_canonical(root_path_);
-
-        if (std::distance(root_canonical.begin(), root_canonical.end()) >
-            std::distance(requested_path.begin(), requested_path.end())) {
-            return RequestType::BAD_REQUEST;
-            }
-
-        return std::equal(root_canonical.begin(), root_canonical.end(),
-                        requested_path.begin()) ? RequestType::FILE :
-                                                RequestType::BAD_REQUEST;
+        auto root_it = root_canonical.begin();
+        auto path_it = full_path.begin();
+        while (root_it != root_canonical.end() && path_it != full_path.end()) {
+            if (*root_it != *path_it) break;
+            ++root_it;
+            ++path_it;
+        }
+        return (root_it == root_canonical.end()) ? RequestType::FILE :
+                                                 RequestType::BAD_REQUEST;
     }
-    catch (...) {
+    catch (const std::exception&) {
         return RequestType::BAD_REQUEST;
     }
 }
