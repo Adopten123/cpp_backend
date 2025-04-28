@@ -80,32 +80,37 @@ json::array RequestHandler::ProcessMapsRequestBody() const {
 }
 
 RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target) const {
-    auto request = SplitRequest(target.substr(1, target.length() - 1));
-
-    if (request.size() > 2 and request[0] == RestApiLiterals::API
-        and request[1] == RestApiLiterals::VERSION_1
-        and request[2] == RestApiLiterals::MAPS) {
-
-        if (request.size() == 3)
-            return RequestHandler::RequestType::API_MAPS;
-        else if (request.size() == 4)
-            return RequestHandler::RequestType::API_MAP;
-        else
-            return RequestHandler::RequestType::BAD_REQUEST;
-    }
-    if (request[0] == RestApiLiterals::API) {
-        return RequestHandler::RequestType::BAD_REQUEST;
-    }
-    auto temp_path = root_path_;
-    temp_path += target;
-    auto path = fs::weakly_canonical(temp_path);
-    auto canonical_root = fs::weakly_canonical(root_path_);
-    for (auto b = canonical_root.begin(), p = path.begin(); b != canonical_root.end(); ++b, ++p) {
-        if (p == path.end() or *p != *b) {
-            return RequestHandler::RequestType::BAD_REQUEST;
+    if (auto parts = SplitRequest(target); !parts.empty()) {
+        if (parts.size() >= 3 and
+            parts[0] == RestApiLiterals::API and
+            parts[1] == RestApiLiterals::VERSION_1 and
+            parts[2] == RestApiLiterals::MAPS)
+        {
+            return parts.size() == 3 ? RequestType::API_MAPS :
+                   parts.size() == 4 ? RequestType::API_MAP :
+                   RequestType::BAD_REQUEST;
+        }
+        if (parts[0] == RestApiLiterals::API) {
+            return RequestType::BAD_REQUEST;
         }
     }
-    return RequestHandler::RequestType::FILE;
+
+    try {
+        const auto requested_path = fs::weakly_canonical(root_path_ / target);
+        const auto root_canonical = fs::weakly_canonical(root_path_);
+
+        if (std::distance(root_canonical.begin(), root_canonical.end()) >
+            std::distance(requested_path.begin(), requested_path.end())) {
+            return RequestType::BAD_REQUEST;
+            }
+
+        return std::equal(root_canonical.begin(), root_canonical.end(),
+                        requested_path.begin()) ? RequestType::FILE :
+                                                RequestType::BAD_REQUEST;
+    }
+    catch (...) {
+        return RequestType::BAD_REQUEST;
+    }
 }
 
 std::string RequestHandler::URLDecode(std::string_view url) const {
