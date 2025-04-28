@@ -96,19 +96,14 @@ RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target
         return RequestHandler::RequestType::BAD_REQUEST;
 
     try {
-        const auto req_path = fs::weakly_canonical(root_path_ / target);
-        const auto root_canonical = fs::weakly_canonical(root_path_);
-
-        auto root_it = root_canonical.begin();
-        auto path_it = req_path.begin();
-        while (root_it != root_canonical.end() && path_it != req_path.end()) {
-            if (*root_it != *path_it) break;
-            ++root_it;
-            ++path_it;
+        auto path = fs::weakly_canonical(root_path_ + target);
+        auto canonical_root = fs::weakly_canonical(root_path_);
+        for (auto root_it = canonical_root.begin(), path_it = path.begin(); root_it != canonical_root.end(); ++root_it, ++path_it) {
+            if (path_it == path.end() || *path_it != *root_it) {
+                return RequestHandler::RequestType::BAD_REQUEST;
+            }
         }
-
-        return (root_it == root_canonical.end()) ? RequestType::FILE :
-                                                 RequestType::BAD_REQUEST;
+        return RequestHandler::RequestType::FILE;
     }
     catch (...) {
         return RequestType::BAD_REQUEST;
