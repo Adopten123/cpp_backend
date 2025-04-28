@@ -83,6 +83,7 @@ json::array SerializeBuildings(const model::Map* map);
 
 class RequestHandler {
 public:
+
     explicit RequestHandler(model::Game& game, const char* path_to_static)
         : game_{ game }
         , root_path_(path_to_static) {
@@ -98,7 +99,8 @@ public:
 
     template <typename Body, typename Allocator, typename Send>
     ResponseData operator()(http::request<Body, http::basic_fields<Allocator>>&& req, Send&& send) {
-        std::string_view path(URLDecode(req.target()));
+        auto string_path = DecodeURL(req.target());
+        std::string_view path(string_path);
 
         switch(CheckRequest(path)) {
         case RequestType::API_MAPS:
@@ -231,7 +233,7 @@ private:
 
     RequestType CheckRequest(std::string_view target) const;
     json::array ProcessMapsRequestBody() const;
-    std::string URLDecode(std::string_view url) const;
+    std::string DecodeURL(std::string_view url) const;
     static int HexToInt(char c);
 };
 

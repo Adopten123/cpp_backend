@@ -136,30 +136,36 @@ std::string_view RequestHandler::ExtensionMapperType::operator()(std::string_vie
     return ContentType::UNKNOWN;
 }
 
-std::string RequestHandler::URLDecode(std::string_view url) const {
-    std::string result;
-    result.reserve(url.size());
-    for (size_t i = 0; i < url.size(); ++i) {
+std::string RequestHandler::DecodeURL(std::string_view url) const {
+    std::vector<char> text;
+    text.reserve(url.length());
+    for (size_t i = 0; i < url.length(); ++i) {
         if (url[i] == '%') {
-            if (i + 2 < url.size()) {
-                int hi = HexToInt(url[i+1]);
-                int lo = HexToInt(url[i+2]);
-                if (hi == -1 || lo == -1) {
-                    result += url[i];
-                } else {
-                    result += static_cast<char>((hi << 4) | lo);
+            if (i + 2 < url.length()) {
+                char hex1 = url[i + 1];
+                char hex2 = url[i + 2];
+
+                if (isxdigit(hex1) and isxdigit(hex2)) {
+                    int code = std::stoi(std::string() + hex1 + hex2, nullptr, 16);
+                    text.emplace_back(static_cast<char>(code));
                     i += 2;
                 }
-            } else {
-                result += url[i];
+                else {
+                    text.emplace_back('%');
+                }
             }
-        } else if (url[i] == '+') {
-            result += ' ';
-        } else {
-            result += url[i];
+            else {
+                text.emplace_back('%');
+            }
+        }
+        else if (url[i] == '+') {
+            text.emplace_back(' ');
+        }
+        else {
+            text.emplace_back(url[i]);
         }
     }
-    return result;
+    return std::string(text.data(), text.size());
 }
 
 int RequestHandler::HexToInt(char c) {
@@ -168,7 +174,6 @@ int RequestHandler::HexToInt(char c) {
     if (c >= 'a' && c <= 'f') return 10 + c - 'a';
     return -1;
 }
-
 
 void LoggingRequestHandler::LogResponse(const RequestHandler::ResponseData& r, double response_time, const boost::beast::net::ip::address& address) {
     json::object response_data;
