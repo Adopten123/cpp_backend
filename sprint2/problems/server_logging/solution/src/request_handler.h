@@ -25,48 +25,6 @@ namespace fs = std::filesystem;
 namespace sys = boost::system;
 namespace logging = boost::log;
 
-struct ContentType {
-    ContentType() = delete;
-    constexpr static std::string_view TEXT_HTML = "text/html"sv;
-    constexpr static std::string_view APP_JSON = "application/json"sv;
-    constexpr static std::string_view TEXT_CSS = "text/css"sv;
-    constexpr static std::string_view TEXT_PLAIN = "text/plain"sv;
-    constexpr static std::string_view TEXT_JAVASCRIPT = "text/javascript"sv;
-    constexpr static std::string_view APP_XML = "application/xml"sv;
-    constexpr static std::string_view PNG = "image/png"sv;
-    constexpr static std::string_view JPEG = "image/jpeg"sv;
-    constexpr static std::string_view GIF = "image/gif"sv;
-    constexpr static std::string_view BMP = "image/bmp"sv;
-    constexpr static std::string_view ICO = "image/vnd.microsoft.icon"sv;
-    constexpr static std::string_view TIFF = "image/tiff"sv;
-    constexpr static std::string_view SVG = "image/svg+xml"sv;
-    constexpr static std::string_view MP3 = "audio/mpeg"sv;
-    constexpr static std::string_view UNKNOWN = "application/octet-stream"sv;
-};
-
-struct FileExtensions {
-    FileExtensions() = delete;
-    constexpr static std::string_view HTML = "html"sv;
-    constexpr static std::string_view HTM = "htm"sv;
-    constexpr static std::string_view JSON = "json"sv;
-    constexpr static std::string_view CSS = "css"sv;
-    constexpr static std::string_view TXT = "txt"sv;
-    constexpr static std::string_view JS = "js"sv;
-    constexpr static std::string_view XML = "xml"sv;
-    constexpr static std::string_view PNG = "png"sv;
-    constexpr static std::string_view JPEG = "jpeg"sv;
-    constexpr static std::string_view JPG = "jpg"sv;
-    constexpr static std::string_view JPE = "jpe"sv;
-    constexpr static std::string_view GIF = "gif"sv;
-    constexpr static std::string_view BMP = "bmp"sv;
-    constexpr static std::string_view ICO = "ico"sv;
-    constexpr static std::string_view TIFF = "tiff"sv;
-    constexpr static std::string_view TIF = "tif"sv;
-    constexpr static std::string_view SVG = "svg"sv;
-    constexpr static std::string_view SVGZ = "svgz"sv;
-    constexpr static std::string_view MP3 = "mp3"sv;
-};
-
 struct RestApiLiterals {
     RestApiLiterals() = delete;
     constexpr static std::string_view API = "api"sv;
@@ -181,7 +139,6 @@ private:
 
     model::Game& game_;
     const fs::path root_path_;
-    ExtensionMapperType mapper_;
 
     constexpr static std::string_view BAD_REQUEST_HTTP_BODY = R"({ "code": "badRequest", "message": "Bad request" })"sv;
     constexpr static std::string_view MAP_NOT_FOUND_HTTP_BODY = R"({ "code": "mapNotFound", "message": "Map not found" })"sv;
@@ -202,7 +159,11 @@ private:
         std::size_t ext_start = path.find_last_of('.', path.size());
         std::string_view type = ContentType::TEXT_HTML;
         if (ext_start != path.npos) {
-            type = mapper_(path.substr(ext_start + 1, path.size() - ext_start + 1));
+            auto it = mime_types.find(extension);
+            if (it != mime_types.end()) {
+                content_type = it->second;
+            }
+            type = it->second;
             res.insert(http::field::content_type, type);
         }
         else {
@@ -235,6 +196,28 @@ private:
     json::array ProcessMapsRequestBody() const;
     std::string DecodeURL(std::string_view url) const;
     static int HexToInt(char c);
+
+    static const std::unordered_map<std::string, std::string> mime_types = {
+        {".html", "text/html"},
+        {".htm", "text/html"},
+        {".css", "text/css"},
+        {".txt", "text/plain"},
+        {".js", "text/javascript"},
+        {".json", "application/json"},
+        {".xml", "application/xml"},
+        {".png", "image/png"},
+        {".jpg", "image/jpeg"},
+        {".jpe", "image/jpeg"},
+        {".jpeg", "image/jpeg"},
+        {".gif", "image/gif"},
+        {".bmp", "image/bmp"},
+        {".ico", "image/vnd.microsoft.icon"},
+        {".tiff", "image/tiff"},
+        {".tif", "image/tiff"},
+        {".svg", "image/svg+xml"},
+        {".svgz", "image/svg+xml"},
+        {".mp3", "audio/mpeg"},
+    };
 };
 
 class LoggingRequestHandler {

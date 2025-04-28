@@ -108,32 +108,10 @@ RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target
     return RequestHandler::RequestType::FILE;
 }
 
-RequestHandler::ExtensionMapperType::ExtensionMapperType() {
-    map_[FileExtensions::HTML] = ContentType::TEXT_HTML;
-    map_[FileExtensions::HTM] = ContentType::TEXT_HTML;
-    map_[FileExtensions::JSON] = ContentType::APP_JSON;
-    map_[FileExtensions::CSS] = ContentType::TEXT_CSS;
-    map_[FileExtensions::TXT] = ContentType::TEXT_PLAIN;
-    map_[FileExtensions::JS] = ContentType::TEXT_JAVASCRIPT;
-    map_[FileExtensions::XML] = ContentType::APP_XML;
-    map_[FileExtensions::PNG] = ContentType::PNG;
-    map_[FileExtensions::JPEG] = ContentType::JPEG;
-    map_[FileExtensions::JPG] = ContentType::JPEG;
-    map_[FileExtensions::JPE] = ContentType::JPEG;
-    map_[FileExtensions::GIF] = ContentType::GIF;
-    map_[FileExtensions::BMP] = ContentType::BMP;
-    map_[FileExtensions::ICO] = ContentType::ICO;
-    map_[FileExtensions::TIFF] = ContentType::TIFF;
-    map_[FileExtensions::TIF] = ContentType::TIFF;
-    map_[FileExtensions::SVG] = ContentType::SVG;
-    map_[FileExtensions::SVGZ] = ContentType::SVG;
-    map_[FileExtensions::MP3] = ContentType::MP3;
-}
-
 std::string_view RequestHandler::ExtensionMapperType::operator()(std::string_view extension) const {
     if (map_.contains(extension))
         return map_.at(extension);
-    return ContentType::UNKNOWN;
+    return "application/octet-stream"sv;
 }
 
 std::string RequestHandler::DecodeURL(std::string_view url) const {
