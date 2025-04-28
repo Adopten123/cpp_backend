@@ -231,7 +231,6 @@ private:
     RequestType CheckRequest(std::string_view target) const;
     json::array ProcessMapsRequestBody() const;
     std::string DecodeURL(std::string_view url) const;
-    static int HexToInt(char c);
 };
 
 }  // namespace http_handler
