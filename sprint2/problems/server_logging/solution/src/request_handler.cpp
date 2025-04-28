@@ -141,7 +141,7 @@ int RequestHandler::HexToInt(char c) {
     return -1;
 }
 
-std::string_view GetMapperType(std::string_view extension) const {
+std::string_view GetMapperType(std::string_view extension) {
     static const std::unordered_map<std::string_view, std::string_view> mime_types = {
         {"html", ContentType::TEXT_HTML}, {"htm", ContentType::TEXT_HTML}, {"json", ContentType::JSON},
         {"css", ContentType::TEXT_CSS}, {"txt", ContentType::TEXT_PLAIN}, {"js", ContentType::TEXT_JAVASCRIPT},

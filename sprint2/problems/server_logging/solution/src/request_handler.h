@@ -169,7 +169,7 @@ private:
         std::size_t ext_start = path.find_last_of('.', path.size());
         std::string_view type = ContentType::TEXT_HTML;
         if (ext_start != path.npos) {
-            type = mapper_(path.substr(ext_start + 1, path.size() - ext_start + 1));
+            type = GetMapperType(path.substr(ext_start + 1, path.size() - ext_start + 1));
             res.insert(http::field::content_type, type);
         }
         else {
@@ -202,7 +202,7 @@ private:
     json::array ProcessMapsRequestBody() const;
     std::string URLDecode(std::string_view url) const;
     static int HexToInt(char c);
-    static std::string_view GetMapperType(std::string_view extension) const;
+    static std::string_view GetMapperType(std::string_view extension);
 };
 
 class LoggingRequestHandler {
