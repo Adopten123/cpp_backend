@@ -23,7 +23,6 @@ namespace json = boost::json;
 namespace http = beast::http;
 namespace fs = std::filesystem;
 namespace sys = boost::system;
-namespace logging = boost::log;
 
 struct ContentType {
     ContentType() = delete;
@@ -83,7 +82,6 @@ json::array SerializeBuildings(const model::Map* map);
 
 class RequestHandler {
 public:
-
     explicit RequestHandler(model::Game& game, const char* path_to_static)
         : game_{ game }
         , root_path_(path_to_static) {
@@ -99,8 +97,7 @@ public:
 
     template <typename Body, typename Allocator, typename Send>
     ResponseData operator()(http::request<Body, http::basic_fields<Allocator>>&& req, Send&& send) {
-        auto string_path = DecodeURL(req.target());
-        std::string_view path(string_path);
+        std::string_view path(DecodeURL(req.target()));
 
         switch(CheckRequest(path)) {
         case RequestType::API_MAPS:
@@ -234,43 +231,7 @@ private:
     RequestType CheckRequest(std::string_view target) const;
     json::array ProcessMapsRequestBody() const;
     std::string DecodeURL(std::string_view url) const;
-};
-
-class LoggingRequestHandler {
-public:
-    LoggingRequestHandler(RequestHandler& handler)
-        : decorated_(handler) {
-    }
-
-    static void Formatter(logging::record_view const& rec, logging::formatting_ostream& strm) {
-        auto ts = *logging::extract<boost::posix_time::ptime>("TimeStamp", rec);
-
-        strm << "{\"timestamp\":\"" << boost::posix_time::to_iso_extended_string(ts) << "\", ";
-        strm << "\"data\":" << json::serialize(*logging::extract<boost::json::value>("AdditionalData", rec)) << ", ";
-        strm << "\"message\":\"" << rec[logging::expressions::smessage] << "\"}";
-    }
-
-    template <typename Body, typename Allocator, typename Send>
-    void operator () (http::request<Body, http::basic_fields<Allocator>>&& req, Send&& send, const boost::beast::net::ip::address& address) {
-        LogRequest(req, address);
-        boost::chrono::system_clock::time_point start = boost::chrono::system_clock::now();
-        RequestHandler::ResponseData resp_data = decorated_(std::move(req), std::move(send));
-        boost::chrono::duration<double> response_time = boost::chrono::system_clock::now() - start;
-        LogResponse(resp_data, response_time.count(), address);
-    }
-
-private:
-    RequestHandler& decorated_;
-
-    template <typename Body, typename Allocator>
-    static void LogRequest(const http::request<Body, http::basic_fields<Allocator>>& r, const boost::beast::net::ip::address& address) {
-        json::object request_data;
-        request_data["ip"] = address.to_string();
-        request_data["URI"] = std::string(r.target());
-        request_data["method"] = r.method_string().data();
-        BOOST_LOG_TRIVIAL(info) << logging::add_value(data, request_data) << "request received";
-    }
-    static void LogResponse(const RequestHandler::ResponseData& r, double response_time, const boost::beast::net::ip::address& address);
+    static int HexToInt(char c);
 };
 
 }  // namespace http_handler

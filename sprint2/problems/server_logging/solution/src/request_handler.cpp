@@ -137,44 +137,36 @@ std::string_view RequestHandler::ExtensionMapperType::operator()(std::string_vie
 }
 
 std::string RequestHandler::DecodeURL(std::string_view url) const {
-    std::vector<char> text;
-    text.reserve(url.length());
-    for (size_t i = 0; i < url.length(); ++i) {
+    std::string result;
+    result.reserve(url.size());
+    for (size_t i = 0; i < url.size(); ++i) {
         if (url[i] == '%') {
-            if (i + 2 < url.length()) {
-                char hex1 = url[i + 1];
-                char hex2 = url[i + 2];
-
-                if (isxdigit(hex1) and isxdigit(hex2)) {
-                    int code = std::stoi(std::string() + hex1 + hex2, nullptr, 16);
-                    text.emplace_back(static_cast<char>(code));
+            if (i + 2 < url.size()) {
+                int hi = HexToInt(url[i+1]);
+                int lo = HexToInt(url[i+2]);
+                if (hi == -1 || lo == -1) {
+                    result += url[i];
+                } else {
+                    result += static_cast<char>((hi << 4) | lo);
                     i += 2;
                 }
-                else {
-                    text.emplace_back('%');
-                }
+            } else {
+                result += url[i];
             }
-            else {
-                text.emplace_back('%');
-            }
-        }
-        else if (url[i] == '+') {
-            text.emplace_back(' ');
-        }
-        else {
-            text.emplace_back(url[i]);
+        } else if (url[i] == '+') {
+            result += ' ';
+        } else {
+            result += url[i];
         }
     }
-    return std::string(text.data(), text.size());
+    return result;
 }
 
-void LoggingRequestHandler::LogResponse(const RequestHandler::ResponseData& r, double response_time, const boost::beast::net::ip::address& address) {
-    json::object response_data;
-    response_data["ip"] = address.to_string();
-    response_data["response_time"] = (int)(response_time * 1000);
-    response_data["code"] = (int)r.code;
-    response_data["content_type"] = r.content_type.data();
-    BOOST_LOG_TRIVIAL(info) << logging::add_value(data, response_data) << "response sent";
+int RequestHandler::HexToInt(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'A' && c <= 'F') return 10 + c - 'A';
+    if (c >= 'a' && c <= 'f') return 10 + c - 'a';
+    return -1;
 }
 
 }  // namespace http_handler
