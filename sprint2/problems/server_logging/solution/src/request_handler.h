@@ -114,6 +114,7 @@ public:
                 http::status::ok ,
                 ContentType::APP_JSON
             };
+            break;
         case RequestType::API_MAP:
         {
             auto request = SplitRequest(path.substr(1, path.length() - 1));
@@ -146,17 +147,28 @@ public:
                     ContentType::APP_JSON
                 };
             }
+            break;
         }
         case RequestType::FILE:
             return SendFileResponseOr404(path, std::move(send), req.version());
+            break;
         case RequestType::BAD_REQUEST:
             return SendBadRequest(std::move(send), req.version());
+            break;
         default:
             return SendBadRequest(std::move(send), req.version());
+            break;
         }
     }
 
 private:
+    enum RequestType {
+        API_MAP,
+        API_MAPS,
+        FILE,
+        BAD_REQUEST
+    };
+
     class ExtensionMapperType {
     public:
         ExtensionMapperType();
@@ -169,13 +181,6 @@ private:
     model::Game& game_;
     const fs::path root_path_;
     ExtensionMapperType mapper_;
-
-    enum RequestType {
-        API_MAP,
-        API_MAPS,
-        FILE,
-        BAD_REQUEST
-    };
 
     constexpr static std::string_view BAD_REQUEST_HTTP_BODY = R"({ "code": "badRequest", "message": "Bad request" })"sv;
     constexpr static std::string_view MAP_NOT_FOUND_HTTP_BODY = R"({ "code": "mapNotFound", "message": "Map not found" })"sv;

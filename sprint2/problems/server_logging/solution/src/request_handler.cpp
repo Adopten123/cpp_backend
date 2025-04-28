@@ -154,16 +154,20 @@ std::string RequestHandler::DecodeURL(std::string_view url) const {
                     text.emplace_back(static_cast<char>(code));
                     i += 2;
                 }
-                else
+                else {
                     text.emplace_back('%');
+                }
             }
-            else
+            else {
                 text.emplace_back('%');
+            }
         }
-        else if (url[i] == '+')
+        else if (url[i] == '+') {
             text.emplace_back(' ');
-        else
+        }
+        else {
             text.emplace_back(url[i]);
+        }
     }
     return std::string(text.data(), text.size());
 }
