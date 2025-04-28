@@ -107,11 +107,40 @@ RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target
     }
     return RequestHandler::RequestType::FILE;
 }
+std::string_view ContentType::FromExtension(std::string_view extension) {
+    static const std::unordered_map<std::string_view, std::string_view> mime_types = {
+        {"html", TEXT_HTML}, {"htm", TEXT_HTML}, {"json", APP_JSON},
+        {"css", TEXT_CSS},   {"txt", TEXT_PLAIN}, {"js", TEXT_JAVASCRIPT},
+        {"png", PNG},        {"jpg", JPEG},       {"jpeg", JPEG}
+    };
+
+    if (auto it = mime_types.find(extension); it != mime_types.end())
+        return it->second;
+    return UNKNOWN;
+}
+
+RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target) const {
+    if (target.empty()) return BAD_REQUEST;
+
+    auto decoded = DecodeURL(target);
+    auto parts = SplitRequest(decoded);
+
+    if (parts.size() >= 3 &&
+        parts[0] == RestApiLiterals::API &&
+        parts[1] == RestApiLiterals::VERSION_1 &&
+        parts[2] == RestApiLiterals::MAPS) {
+        return parts.size() == 3 ? API_MAPS :
+               parts.size() == 4 ? API_MAP : BAD_REQUEST;
+    }
+
+    auto full_path = fs::weakly_canonical(root_path_ / target);
+    return fs::exists(full_path) ? FILE : BAD_REQUEST;
+}
 
 std::string_view RequestHandler::ExtensionMapperType::operator()(std::string_view extension) const {
     if (map_.contains(extension))
         return map_.at(extension);
-    return "application/octet-stream"sv;
+    return ContentType::UNKNOWN;
 }
 
 std::string RequestHandler::DecodeURL(std::string_view url) const {
