@@ -81,35 +81,34 @@ json::array RequestHandler::ProcessMapsRequestBody() const {
 
 RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target) const {
     auto parts = SplitRequest(target.substr(1));
-
-    // Проверка API-запросов
     if (!parts.empty() && parts[0] == RestApiLiterals::API) {
-        if (parts.size() >= 3
-            and parts[1] == RestApiLiterals::VERSION_1
-            and parts[2] == RestApiLiterals::MAPS)
+        if (parts.size() >= 3 &&
+            parts[1] == RestApiLiterals::VERSION_1 &&
+            parts[2] == RestApiLiterals::MAPS)
         {
             return (parts.size() == 3) ? RequestType::API_MAPS :
                    (parts.size() == 4) ? RequestType::API_MAP :
                    RequestType::BAD_REQUEST;
         }
-
         return RequestType::BAD_REQUEST;
     }
 
     try {
-        const auto full_path = fs::weakly_canonical(root_path_ / target);
+        const auto req_path = fs::weakly_canonical(root_path_ / target);
         const auto root_canonical = fs::weakly_canonical(root_path_);
+
         auto root_it = root_canonical.begin();
-        auto path_it = full_path.begin();
-        while (root_it != root_canonical.end() && path_it != full_path.end()) {
+        auto path_it = req_path.begin();
+        while (root_it != root_canonical.end() && path_it != req_path.end()) {
             if (*root_it != *path_it) break;
             ++root_it;
             ++path_it;
         }
+
         return (root_it == root_canonical.end()) ? RequestType::FILE :
                                                  RequestType::BAD_REQUEST;
     }
-    catch (const std::exception&) {
+    catch (...) {
         return RequestType::BAD_REQUEST;
     }
 }
