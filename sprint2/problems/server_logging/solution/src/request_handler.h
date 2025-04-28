@@ -137,35 +137,36 @@ private:
 
     template<typename Send>
     ResponseData SendFileResponseOr404(std::string_view path, Send&& send, unsigned http_version) const {
-        auto decoded_path = DecodeURL(path);
-        auto full_path = fs::weakly_canonical(root_path_ / decoded_path);
+        std::string decoded_path = DecodeURL(path);
+        fs::path full_path = root_path_ / decoded_path;
 
         if (!fs::exists(full_path) || !fs::is_regular_file(full_path)) {
             SendResponse(http::status::not_found, FILE_NOT_FOUND_HTTP_BODY, http_version, std::move(send), ContentType::TEXT_PLAIN);
             return {http::status::not_found, ContentType::TEXT_PLAIN};
         }
 
-        const auto ext = full_path.extension().string().substr(1);
-        const auto content_type = ContentType::FromExtension(ext);
+        // Определение Content-Type
+        std::string ext = full_path.extension().string().substr(1); // Удаляем точку
+        std::string_view content_type = ContentType::FromExtension(ext);
+
+        // Отправка файла
+        http::file_body::value_type file;
+        beast::error_code ec;
+        file.open(full_path.c_str(), beast::file_mode::read, ec);
+
+        if (ec) {
+            SendResponse(http::status::not_found, FILE_NOT_FOUND_HTTP_BODY, http_version, std::move(send), ContentType::TEXT_PLAIN);
+            return {http::status::not_found, ContentType::TEXT_PLAIN};
+        }
 
         http::response<http::file_body> res;
         res.version(http_version);
         res.result(http::status::ok);
-        res.insert(http::field::content_type, content_type);
-
-        beast::error_code ec;
-        res.body().open(full_path.c_str(), beast::file_mode::read, ec);
-        if (ec) {
-            SendResponse(http::status::not_found,
-                        FILE_NOT_FOUND_HTTP_BODY,
-                        http_version,
-                        std::move(send),
-                        ContentType::TEXT_PLAIN);
-            return {http::status::not_found, ContentType::TEXT_PLAIN};
-        }
-
+        res.set(http::field::content_type, content_type);
+        res.body() = std::move(file);
         res.prepare_payload();
         send(std::move(res));
+
         return {http::status::ok, content_type};
     }
 

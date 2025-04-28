@@ -83,7 +83,8 @@ std::string_view ContentType::FromExtension(std::string_view extension) {
     static const std::unordered_map<std::string_view, std::string_view> mime_types = {
         {"html", TEXT_HTML}, {"htm", TEXT_HTML}, {"json", APP_JSON},
         {"css", TEXT_CSS},   {"txt", TEXT_PLAIN}, {"js", TEXT_JAVASCRIPT},
-        {"png", PNG},        {"jpg", JPEG},       {"jpeg", JPEG}
+        {"png", PNG},        {"jpg", JPEG},       {"jpeg", JPEG},
+        {"svg", SVG},        {"ico", ICO}
     };
 
     if (auto it = mime_types.find(extension); it != mime_types.end())
@@ -92,24 +93,22 @@ std::string_view ContentType::FromExtension(std::string_view extension) {
 }
 
 RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target) const {
-    if (target.empty())
-        return BAD_REQUEST;
+    if (target.empty()) return BAD_REQUEST;
 
-    auto decoded = DecodeURL(target);
+    std::string decoded = DecodeURL(target);
     auto parts = SplitRequest(decoded);
 
-    // Проверка API-запросов
-    if (parts.size() >= 3 &&
-        parts[0] == RestApiLiterals::API &&
-        parts[1] == RestApiLiterals::VERSION_1 &&
-        parts[2] == RestApiLiterals::MAPS) {
-        return (parts.size() == 3) ? API_MAPS :
-               (parts.size() == 4) ? API_MAP : BAD_REQUEST;
-        }
+    if (parts.size() >= 3) {
+        if (parts[0] == RestApiLiterals::API &&
+            parts[1] == RestApiLiterals::VERSION_1 &&
+            parts[2] == RestApiLiterals::MAPS) {
+            return (parts.size() == 3) ? API_MAPS :
+                   (parts.size() == 4) ? API_MAP : BAD_REQUEST;
+            }
+    }
 
-    // Проверка файловых запросов
-    auto full_path = fs::weakly_canonical(root_path_ / decoded);
-    if (fs::exists(full_path) && fs::is_regular_file(full_path)) {
+    fs::path file_path = root_path_ / decoded;
+    if (fs::exists(file_path) && fs::is_regular_file(file_path)) {
         return FILE;
     }
 
@@ -118,21 +117,11 @@ RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target
 
 std::string RequestHandler::DecodeURL(std::string_view url) const {
     std::string result;
-    result.reserve(url.size());
     for (size_t i = 0; i < url.size(); ++i) {
-        if (url[i] == '%') {
-            if (i + 2 < url.size()) {
-                int hi = HexToInt(url[i+1]);
-                int lo = HexToInt(url[i+2]);
-                if (hi == -1 || lo == -1) {
-                    result += url[i];
-                } else {
-                    result += static_cast<char>((hi << 4) | lo);
-                    i += 2;
-                }
-            } else {
-                result += url[i];
-            }
+        if (url[i] == '%' && i + 2 < url.size()) {
+            int code = HexToInt(url[i+1]) * 16 + HexToInt(url[i+2]);
+            result += static_cast<char>(code);
+            i += 2;
         } else if (url[i] == '+') {
             result += ' ';
         } else {
