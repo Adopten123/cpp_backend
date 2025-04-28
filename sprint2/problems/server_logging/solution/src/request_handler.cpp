@@ -109,12 +109,6 @@ RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target
     return fs::exists(full_path) ? FILE : BAD_REQUEST;
 }
 
-std::string_view RequestHandler::ExtensionMapperType::operator()(std::string_view extension) const {
-    if (map_.contains(extension))
-        return map_.at(extension);
-    return ContentType::UNKNOWN;
-}
-
 std::string RequestHandler::DecodeURL(std::string_view url) const {
     std::vector<char> text;
     text.reserve(url.length());
