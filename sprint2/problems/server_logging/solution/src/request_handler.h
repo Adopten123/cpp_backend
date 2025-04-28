@@ -25,6 +25,25 @@ namespace fs = std::filesystem;
 namespace sys = boost::system;
 namespace logging = boost::log;
 
+struct ContentType {
+    ContentType() = delete;
+    constexpr static std::string_view TEXT_HTML = "text/html"sv;
+    constexpr static std::string_view APP_JSON = "application/json"sv;
+    constexpr static std::string_view TEXT_CSS = "text/css"sv;
+    constexpr static std::string_view TEXT_PLAIN = "text/plain"sv;
+    constexpr static std::string_view TEXT_JAVASCRIPT = "text/javascript"sv;
+    constexpr static std::string_view APP_XML = "application/xml"sv;
+    constexpr static std::string_view PNG = "image/png"sv;
+    constexpr static std::string_view JPEG = "image/jpeg"sv;
+    constexpr static std::string_view GIF = "image/gif"sv;
+    constexpr static std::string_view BMP = "image/bmp"sv;
+    constexpr static std::string_view ICO = "image/vnd.microsoft.icon"sv;
+    constexpr static std::string_view TIFF = "image/tiff"sv;
+    constexpr static std::string_view SVG = "image/svg+xml"sv;
+    constexpr static std::string_view MP3 = "audio/mpeg"sv;
+    constexpr static std::string_view UNKNOWN = "application/octet-stream"sv;
+};
+
 struct RestApiLiterals {
     RestApiLiterals() = delete;
     constexpr static std::string_view API = "api"sv;
@@ -157,7 +176,7 @@ private:
         res.result(http::status::ok);
         std::string full_path = root_path_.string() + path.data();
         std::size_t ext_start = path.find_last_of('.', path.size());
-        std::string_view type = ContentType::TEXT_HTML;
+        std::string_view type = "application/octet-stream"sv;
         if (ext_start != path.npos) {
             auto it = mime_types.find(extension);
             if (it != mime_types.end()) {
@@ -197,26 +216,26 @@ private:
     std::string DecodeURL(std::string_view url) const;
     static int HexToInt(char c);
 
-    static const std::unordered_map<std::string, std::string> mime_types = {
-        {".html", "text/html"},
-        {".htm", "text/html"},
-        {".css", "text/css"},
-        {".txt", "text/plain"},
-        {".js", "text/javascript"},
-        {".json", "application/json"},
-        {".xml", "application/xml"},
-        {".png", "image/png"},
-        {".jpg", "image/jpeg"},
-        {".jpe", "image/jpeg"},
-        {".jpeg", "image/jpeg"},
-        {".gif", "image/gif"},
-        {".bmp", "image/bmp"},
-        {".ico", "image/vnd.microsoft.icon"},
-        {".tiff", "image/tiff"},
-        {".tif", "image/tiff"},
-        {".svg", "image/svg+xml"},
-        {".svgz", "image/svg+xml"},
-        {".mp3", "audio/mpeg"},
+    static const std::unordered_map<std::string_view, std::string_view> mime_types = {
+        {".html"sv, "text/html"sv},
+        {".htm"sv, "text/html"sv},
+        {".css"sv, "text/css"sv},
+        {".txt"sv, "text/plain"sv},
+        {".js"sv, "text/javascript"sv},
+        {".json"sv, "application/json"sv},
+        {".xml"sv, "application/xml"sv},
+        {".png"sv, "image/png"sv},
+        {".jpg"sv, "image/jpeg"sv},
+        {".jpe"sv, "image/jpeg"sv},
+        {".jpeg"sv, "image/jpeg"sv},
+        {".gif"sv, "image/gif"sv},
+        {".bmp"sv, "image/bmp"sv},
+        {".ico"sv, "image/vnd.microsoft.icon"sv},
+        {".tiff"sv, "image/tiff"sv},
+        {".tif"sv, "image/tiff"sv},
+        {".svg"sv, "image/svg+xml"sv},
+        {".svgz"sv, "image/svg+xml"sv},
+        {".mp3"sv, "audio/mpeg"sv},
     };
 };
 
