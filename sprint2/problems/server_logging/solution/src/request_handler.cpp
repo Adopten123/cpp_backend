@@ -81,17 +81,19 @@ json::array RequestHandler::ProcessMapsRequestBody() const {
 
 RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target) const {
     auto parts = SplitRequest(target.substr(1, target.length() - 1));
-    if (!parts.empty() && parts[0] == RestApiLiterals::API) {
-        if (parts.size() >= 3 &&
-            parts[1] == RestApiLiterals::VERSION_1 &&
-            parts[2] == RestApiLiterals::MAPS)
-        {
-            return (parts.size() == 3) ? RequestType::API_MAPS :
-                   (parts.size() == 4) ? RequestType::API_MAP :
-                   RequestType::BAD_REQUEST;
-        }
-        return RequestType::BAD_REQUEST;
+    if (parts.size() >= 3
+        and parts[1] == RestApiLiterals::VERSION_1
+        and parts[2] == RestApiLiterals::MAPS) {
+            if (request.size() == 3)
+                return RequestHandler::RequestType::API_MAPS;
+            else if (request.size() == 4)
+                return RequestHandler::RequestType::API_MAP;
+            else
+                return RequestHandler::RequestType::BAD_REQUEST;
     }
+
+    if (request[0] == RestApiLiterals::API)
+        return RequestHandler::RequestType::BAD_REQUEST;
 
     try {
         const auto req_path = fs::weakly_canonical(root_path_ / target);
