@@ -96,7 +96,6 @@ RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target
         return RequestHandler::RequestType::BAD_REQUEST;
 
     try {
-    }
         auto temp_path = root_path_ + target;
         auto path = fs::weakly_canonical(temp_path);
         auto canonical_root = fs::weakly_canonical(root_path_);
