@@ -29,19 +29,7 @@ struct ContentType {
     ContentType() = delete;
     constexpr static std::string_view TEXT_HTML = "text/html"sv;
     constexpr static std::string_view APP_JSON = "application/json"sv;
-    constexpr static std::string_view TEXT_CSS = "text/css"sv;
     constexpr static std::string_view TEXT_PLAIN = "text/plain"sv;
-    constexpr static std::string_view TEXT_JAVASCRIPT = "text/javascript"sv;
-    constexpr static std::string_view APP_XML = "application/xml"sv;
-    constexpr static std::string_view PNG = "image/png"sv;
-    constexpr static std::string_view JPEG = "image/jpeg"sv;
-    constexpr static std::string_view GIF = "image/gif"sv;
-    constexpr static std::string_view BMP = "image/bmp"sv;
-    constexpr static std::string_view ICO = "image/vnd.microsoft.icon"sv;
-    constexpr static std::string_view TIFF = "image/tiff"sv;
-    constexpr static std::string_view SVG = "image/svg+xml"sv;
-    constexpr static std::string_view MP3 = "audio/mpeg"sv;
-    constexpr static std::string_view UNKNOWN = "application/octet-stream"sv;
 };
 
 struct FileExtensions {
@@ -76,14 +64,18 @@ struct RestApiLiterals {
 
 std::vector<std::string_view> SplitRequest(std::string_view body);
 
-json::object MapToJSON(const model::Map* map);
-json::array RoadsToJson(const model::Map* map);
-json::array OfficesToJson(const model::Map* map);
-json::array BuildingsToJson(const model::Map* map);
+json::object SerializeMap(const model::Map* map);
+json::array SerializeRoads(const model::Map* map);
+json::array SerializeOffices(const model::Map* map);
+json::array SerializeBuildings(const model::Map* map);
 
 class RequestHandler {
 public:
-    explicit RequestHandler(model::Game& game, const char* path_to_static);
+
+    explicit RequestHandler(model::Game& game, const char* path_to_static)
+        : game_{ game }
+        , root_path_(path_to_static) {
+    }
 
     RequestHandler(const RequestHandler&) = delete;
     RequestHandler& operator=(const RequestHandler&) = delete;
@@ -95,47 +87,67 @@ public:
 
     template <typename Body, typename Allocator, typename Send>
     ResponseData operator()(http::request<Body, http::basic_fields<Allocator>>&& req, Send&& send) {
-        auto string_target = DecodeURL(req.target());
-        std::string_view target(string_target);
-        auto unslashed = target.substr(1, target.length() - 1);
-        switch(CheckRequest(target)) {
+        std::string_view path(DecodeURL(req.target()));
+
+        switch(CheckRequest(path)) {
         case RequestType::API_MAPS:
-            SendResponse(http::status::ok, json::serialize(ProcessMapsRequestBody()), req.version(), std::move(send), ContentType::APP_JSON);
-            return { http::status::ok , ContentType::APP_JSON };
-            break;
+            SendResponse(
+                http::status::ok,
+                json::serialize(ProcessMapsRequestBody()),
+                req.version(),
+                std::move(send),
+                ContentType::APP_JSON
+            );
+            return {
+                http::status::ok ,
+                ContentType::APP_JSON
+            };
         case RequestType::API_MAP:
         {
-            auto request = SplitRequest(unslashed);
+            auto request = SplitRequest(path.substr(1, path.length() - 1));
             std::string id_text(request[3].data(), request[3].size());
             model::Map::Id id(id_text);
             const auto* map = game_.FindMap(id);
             if (map) {
-                SendResponse(http::status::ok, json::serialize(MapToJSON(map)), req.version(), std::move(send), ContentType::APP_JSON);
-                return { http::status::ok , ContentType::APP_JSON };
+                SendResponse(
+                    http::status::ok,
+                    json::serialize(SerializeMap(map)),
+                    req.version(),
+                    std::move(send),
+                    ContentType::APP_JSON
+                );
+                return {
+                    http::status::ok ,
+                    ContentType::APP_JSON
+                };
             }
             else {
-                SendResponse(http::status::not_found, MAP_NOT_FOUND_HTTP_BODY, req.version(), std::move(send), ContentType::APP_JSON);
-                return { http::status::not_found , ContentType::APP_JSON};
+                SendResponse(
+                    http::status::not_found,
+                    MAP_NOT_FOUND_HTTP_BODY,
+                    req.version(),
+                    std::move(send),
+                    ContentType::APP_JSON
+                );
+                return {
+                    http::status::not_found,
+                    ContentType::APP_JSON
+                };
             }
-            break;
         }
         case RequestType::FILE:
-            return SendFileResponseOr404(target, std::move(send), req.version());
-            break;
+            return SendFileResponseOr404(path, std::move(send), req.version());
         case RequestType::BAD_REQUEST:
             return SendBadRequest(std::move(send), req.version());
-            break;
         default:
             return SendBadRequest(std::move(send), req.version());
-            break;
         }
     }
 
 private:
-    class ExtensionToConetntTypeMapper {
+    class ExtensionMapperType {
     public:
-        ExtensionToConetntTypeMapper();
-
+        ExtensionMapperType();
         std::string_view operator()(std::string_view extension) const;
 
     private:
@@ -144,7 +156,7 @@ private:
 
     model::Game& game_;
     const fs::path root_path_;
-    ExtensionToConetntTypeMapper mapper_;
+    ExtensionMapperType mapper_;
 
     enum RequestType {
         API_MAP,
@@ -207,17 +219,9 @@ private:
 };
 
 class LoggingRequestHandler {
-    template <typename Body, typename Allocator>
-    static void LogRequest(const http::request<Body, http::basic_fields<Allocator>>& r, const boost::beast::net::ip::address& address) {
-        json::object request_data;
-        request_data["ip"] = address.to_string();
-        request_data["URI"] = std::string(r.target());
-        request_data["method"] = r.method_string().data();
-        BOOST_LOG_TRIVIAL(info) << logging::add_value(data, request_data) << "request received";
-    }
-    static void LogResponse(const RequestHandler::ResponseData& r, double response_time, const boost::beast::net::ip::address& address);
 public:
-    LoggingRequestHandler(RequestHandler& handler) : decorated_(handler) {
+    LoggingRequestHandler(RequestHandler& handler)
+        : decorated_(handler) {
     }
 
     static void Formatter(logging::record_view const& rec, logging::formatting_ostream& strm) {
@@ -239,6 +243,16 @@ public:
 
 private:
     RequestHandler& decorated_;
+
+    template <typename Body, typename Allocator>
+    static void LogRequest(const http::request<Body, http::basic_fields<Allocator>>& r, const boost::beast::net::ip::address& address) {
+        json::object request_data;
+        request_data["ip"] = address.to_string();
+        request_data["URI"] = std::string(r.target());
+        request_data["method"] = r.method_string().data();
+        BOOST_LOG_TRIVIAL(info) << logging::add_value(data, request_data) << "request received";
+    }
+    static void LogResponse(const RequestHandler::ResponseData& r, double response_time, const boost::beast::net::ip::address& address);
 };
 
 }  // namespace http_handler

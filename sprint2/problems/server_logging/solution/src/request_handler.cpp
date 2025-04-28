@@ -17,17 +17,17 @@ std::vector<std::string_view> SplitRequest(std::string_view body) {
     return result;
 }
 
-json::object MapToJSON(const model::Map* map) {
+json::object SerializeMap(const model::Map* map) {
     json::object obj;
     obj[std::string(model::ModelLiterals::ID)] = *map->GetId();
     obj[std::string(model::ModelLiterals::NAME)] = map->GetName();
-    obj[std::string(model::ModelLiterals::ROADS)] = RoadsToJson(map);
-    obj[std::string(model::ModelLiterals::BUILDINGS)] = BuildingsToJson(map);
-    obj[std::string(model::ModelLiterals::OFFICES)] = OfficesToJson(map);
+    obj[std::string(model::ModelLiterals::ROADS)] = SerializeRoads(map);
+    obj[std::string(model::ModelLiterals::BUILDINGS)] = SerializeBuildings(map);
+    obj[std::string(model::ModelLiterals::OFFICES)] = SerializeOffices(map);
     return obj;
 }
 
-json::array RoadsToJson(const model::Map* map) {
+json::array SerializeRoads(const model::Map* map) {
     json::array roads;
     for (const auto& road : map->GetRoads()) {
         json::object json_road;
@@ -40,7 +40,7 @@ json::array RoadsToJson(const model::Map* map) {
     return roads;
 }
 
-json::array OfficesToJson(const model::Map* map) {
+json::array SerializeOffices(const model::Map* map) {
     json::array offices;
     for (const auto& office : map->GetOffices()) {
         json::object json_office;
@@ -54,7 +54,7 @@ json::array OfficesToJson(const model::Map* map) {
     return offices;
 }
 
-json::array BuildingsToJson(const model::Map* map) {
+json::array SerializeBuildings(const model::Map* map) {
     json::array buildings;
     for (const auto& building : map->GetBuildings()) {
         json::object json_building;
@@ -66,11 +66,6 @@ json::array BuildingsToJson(const model::Map* map) {
         buildings.emplace_back(json_building);
     }
     return buildings;
-}
-
-RequestHandler::RequestHandler(model::Game& game, const char* path_to_static)
-    : game_{ game },
-    root_path_(path_to_static) {
 }
 
 json::array RequestHandler::ProcessMapsRequestBody() const {
@@ -85,17 +80,22 @@ json::array RequestHandler::ProcessMapsRequestBody() const {
 }
 
 RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target) const {
-    auto request = SplitRequest(target.substr(1, target.length() - 1));
-    if (request.size() > 2 && request[0] == RestApiLiterals::API && request[1] == RestApiLiterals::VERSION_1 && request[2] == RestApiLiterals::MAPS) {
-        if (request.size() == 3) {
+    if (target.empty()) {
+        return RequestType::BAD_REQUEST;
+    }
+    auto decoded_target = DecodeURL(target);
+    auto request = SplitRequest(decoded_target.substr(1));
+
+    if (request.size() > 2 and request[0] == RestApiLiterals::API
+        and request[1] == RestApiLiterals::VERSION_1
+        and request[2] == RestApiLiterals::MAPS) {
+
+        if (request.size() == 3)
             return RequestHandler::RequestType::API_MAPS;
-        }
-        else if (request.size() == 4) {
+        else if (request.size() == 4)
             return RequestHandler::RequestType::API_MAP;
-        }
-        else {
+        else
             return RequestHandler::RequestType::BAD_REQUEST;
-        }
     }
     if (request[0] == RestApiLiterals::API) {
         return RequestHandler::RequestType::BAD_REQUEST;
@@ -105,14 +105,14 @@ RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target
     auto path = fs::weakly_canonical(temp_path);
     auto canonical_root = fs::weakly_canonical(root_path_);
     for (auto b = canonical_root.begin(), p = path.begin(); b != canonical_root.end(); ++b, ++p) {
-        if (p == path.end() || *p != *b) {
+        if (p == path.end() or *p != *b) {
             return RequestHandler::RequestType::BAD_REQUEST;
         }
     }
     return RequestHandler::RequestType::FILE;
 }
 
-RequestHandler::ExtensionToConetntTypeMapper::ExtensionToConetntTypeMapper() {
+RequestHandler::ExtensionMapperType::ExtensionMapperType() {
     map_[FileExtensions::HTML] = ContentType::TEXT_HTML;
     map_[FileExtensions::HTM] = ContentType::TEXT_HTML;
     map_[FileExtensions::JSON] = ContentType::APP_JSON;
@@ -134,10 +134,10 @@ RequestHandler::ExtensionToConetntTypeMapper::ExtensionToConetntTypeMapper() {
     map_[FileExtensions::MP3] = ContentType::MP3;
 }
 
-std::string_view RequestHandler::ExtensionToConetntTypeMapper::operator()(std::string_view extension) const {
-    if (map_.contains(extension)) {
+std::string_view RequestHandler::ExtensionMapperType::operator()(std::string_view extension) const {
+    if (map_.contains(extension))
         return map_.at(extension);
-    }
+
     return ContentType::UNKNOWN;
 }
 
@@ -150,25 +150,21 @@ std::string RequestHandler::DecodeURL(std::string_view url) const {
                 char hex1 = url[i + 1];
                 char hex2 = url[i + 2];
 
-                if (isxdigit(hex1) && isxdigit(hex2)) {
+                if (isxdigit(hex1) and isxdigit(hex2)) {
                     int code = std::stoi(std::string() + hex1 + hex2, nullptr, 16);
                     text.emplace_back(static_cast<char>(code));
                     i += 2;
                 }
-                else {
+                else
                     text.emplace_back('%');
-                }
             }
-            else {
+            else
                 text.emplace_back('%');
-            }
         }
-        else if (url[i] == '+') {
+        else if (url[i] == '+')
             text.emplace_back(' ');
-        }
-        else {
+        else
             text.emplace_back(url[i]);
-        }
     }
     return std::string(text.data(), text.size());
 }

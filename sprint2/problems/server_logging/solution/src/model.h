@@ -1,11 +1,16 @@
 #pragma once
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
 #include "tagged.h"
 
 namespace model {
+
+using namespace std::literals;
+using Dimension = int;
+using Coord = Dimension;
 
 struct ModelLiterals {
     ModelLiterals() = delete;
@@ -26,9 +31,6 @@ struct ModelLiterals {
     constexpr static std::string_view OFFICES = "offices"sv;
     constexpr static std::string_view BUILDINGS = "buildings"sv;
 };
-
-using Dimension = int;
-using Coord = Dimension;
 
 struct Point {
     Coord x, y;
