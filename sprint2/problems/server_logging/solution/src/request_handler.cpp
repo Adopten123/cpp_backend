@@ -79,49 +79,52 @@ json::array RequestHandler::ProcessMapsRequestBody() const {
     return maps_body;
 }
 
-std::string_view ContentType::FromExtension(std::string_view extension) {
-    static const std::unordered_map<std::string_view, std::string_view> mime_types = {
-        {"html", TEXT_HTML}, {"htm", TEXT_HTML}, {"json", APP_JSON},
-        {"css", TEXT_CSS},   {"txt", TEXT_PLAIN}, {"js", TEXT_JAVASCRIPT},
-        {"png", PNG},        {"jpg", JPEG},       {"jpeg", JPEG},
-        {"svg", SVG},        {"ico", ICO}
-    };
-
-    if (auto it = mime_types.find(extension); it != mime_types.end())
-        return it->second;
-    return UNKNOWN;
-}
-
 RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target) const {
-    if (target.empty()) return BAD_REQUEST;
+    auto request = SplitRequest(target.substr(1, target.length() - 1));
 
-    std::string decoded = DecodeURL(target);
-    auto parts = SplitRequest(decoded);
+    if (request.size() > 2 and request[0] == RestApiLiterals::API
+        and request[1] == RestApiLiterals::VERSION_1
+        and request[2] == RestApiLiterals::MAPS) {
 
-    if (parts.size() >= 3) {
-        if (parts[0] == RestApiLiterals::API &&
-            parts[1] == RestApiLiterals::VERSION_1 &&
-            parts[2] == RestApiLiterals::MAPS) {
-            return (parts.size() == 3) ? API_MAPS :
-                   (parts.size() == 4) ? API_MAP : BAD_REQUEST;
-            }
+        if (request.size() == 3)
+            return RequestHandler::RequestType::API_MAPS;
+        else if (request.size() == 4)
+            return RequestHandler::RequestType::API_MAP;
+        else
+            return RequestHandler::RequestType::BAD_REQUEST;
     }
-
-    fs::path file_path = root_path_ / decoded;
-    if (fs::exists(file_path) && fs::is_regular_file(file_path)) {
-        return FILE;
+    if (request[0] == RestApiLiterals::API) {
+        return RequestHandler::RequestType::BAD_REQUEST;
     }
-
-    return BAD_REQUEST;
+    auto temp_path = root_path_;
+    temp_path += target;
+    auto path = fs::weakly_canonical(temp_path);
+    auto canonical_root = fs::weakly_canonical(root_path_);
+    for (auto b = canonical_root.begin(), p = path.begin(); b != canonical_root.end(); ++b, ++p) {
+        if (p == path.end() or *p != *b) {
+            return RequestHandler::RequestType::BAD_REQUEST;
+        }
+    }
+    return RequestHandler::RequestType::FILE;
 }
 
-std::string RequestHandler::DecodeURL(std::string_view url) const {
+std::string RequestHandler::URLDecode(std::string_view url) const {
     std::string result;
+    result.reserve(url.size());
     for (size_t i = 0; i < url.size(); ++i) {
-        if (url[i] == '%' && i + 2 < url.size()) {
-            int code = HexToInt(url[i+1]) * 16 + HexToInt(url[i+2]);
-            result += static_cast<char>(code);
-            i += 2;
+        if (url[i] == '%') {
+            if (i + 2 < url.size()) {
+                int hi = HexToInt(url[i+1]);
+                int lo = HexToInt(url[i+2]);
+                if (hi == -1 || lo == -1) {
+                    result += url[i];
+                } else {
+                    result += static_cast<char>((hi << 4) | lo);
+                    i += 2;
+                }
+            } else {
+                result += url[i];
+            }
         } else if (url[i] == '+') {
             result += ' ';
         } else {
@@ -136,6 +139,22 @@ int RequestHandler::HexToInt(char c) {
     if (c >= 'A' && c <= 'F') return 10 + c - 'A';
     if (c >= 'a' && c <= 'f') return 10 + c - 'a';
     return -1;
+}
+
+std::string_view GetMapperType(std::string_view extension) const {
+    static const std::unordered_map<std::string_view, std::string_view> mime_types = {
+        {"html", ContentType::TEXT_HTML}, {"htm", ContentType::TEXT_HTML}, {"json", ContentType::JSON},
+        {"css", ContentType::TEXT_CSS}, {"txt", ContentType::TEXT_PLAIN}, {"js", ContentType::TEXT_JAVASCRIPT},
+        {"xml", ContentType::APP_XML}, {"png", ContentType::PNG}, {"jpeg", ContentType::JPEG}, {"jpg", ContentType::JPEG},
+        {"jpe", ContentType::JPEG}, {"gif", ContentType::GIF}, {"bmp", ContentType::BMP}, {"ico", ContentType::ICO},
+        {"tiff", ContentType::TIFF}, {"tif", ContentType::TIFF}, {"svg", ContentType::SVG}, {"svgz", ContentType::SVG},
+        {"mp3", ContentType::MP3},
+    };
+
+    if (mime_types.contains(extension)) {
+        return mime_types.at(extension);
+    }
+    return ContentType::UNKNOWN;
 }
 
 void LoggingRequestHandler::LogResponse(const RequestHandler::ResponseData& r, double response_time, const boost::beast::net::ip::address& address) {

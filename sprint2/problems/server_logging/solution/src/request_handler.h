@@ -27,8 +27,6 @@ namespace logging = boost::log;
 
 struct ContentType {
     ContentType() = delete;
-    static std::string_view FromExtension(std::string_view extension);
-
     constexpr static std::string_view TEXT_HTML = "text/html"sv;
     constexpr static std::string_view APP_JSON = "application/json"sv;
     constexpr static std::string_view TEXT_CSS = "text/css"sv;
@@ -62,8 +60,11 @@ json::array SerializeBuildings(const model::Map* map);
 
 class RequestHandler {
 public:
+
     explicit RequestHandler(model::Game& game, const char* path_to_static)
-        : game_{game}, root_path_{path_to_static} {}
+        : game_{ game }
+        , root_path_(path_to_static) {
+    }
 
     RequestHandler(const RequestHandler&) = delete;
     RequestHandler& operator=(const RequestHandler&) = delete;
@@ -72,6 +73,73 @@ public:
         http::status code;
         std::string_view content_type;
     };
+
+    template <typename Body, typename Allocator, typename Send>
+    ResponseData operator()(http::request<Body, http::basic_fields<Allocator>>&& req, Send&& send) {
+        auto string_path = URLDecode(req.target());
+        std::string_view path(string_path);
+
+        switch(CheckRequest(path)) {
+        case RequestType::API_MAPS:
+            SendResponse(
+                http::status::ok,
+                json::serialize(ProcessMapsRequestBody()),
+                req.version(),
+                std::move(send),
+                ContentType::APP_JSON
+            );
+            return {
+                http::status::ok ,
+                ContentType::APP_JSON
+            };
+            break;
+        case RequestType::API_MAP:
+        {
+            auto request = SplitRequest(path.substr(1, path.length() - 1));
+            std::string id_text(request[3].data(), request[3].size());
+            model::Map::Id id(id_text);
+            const auto* map = game_.FindMap(id);
+            if (map) {
+                SendResponse(
+                    http::status::ok,
+                    json::serialize(SerializeMap(map)),
+                    req.version(),
+                    std::move(send),
+                    ContentType::APP_JSON
+                );
+                return {
+                    http::status::ok ,
+                    ContentType::APP_JSON
+                };
+            }
+            else {
+                SendResponse(
+                    http::status::not_found,
+                    MAP_NOT_FOUND_HTTP_BODY,
+                    req.version(),
+                    std::move(send),
+                    ContentType::APP_JSON
+                );
+                return {
+                    http::status::not_found,
+                    ContentType::APP_JSON
+                };
+            }
+            break;
+        }
+        case RequestType::FILE:
+            return SendFileResponseOr404(path, std::move(send), req.version());
+            break;
+        case RequestType::BAD_REQUEST:
+            return SendBadRequest(std::move(send), req.version());
+            break;
+        default:
+            return SendBadRequest(std::move(send), req.version());
+            break;
+        }
+    }
+
+private:
     enum RequestType {
         API_MAP,
         API_MAPS,
@@ -79,120 +147,62 @@ public:
         BAD_REQUEST
     };
 
-    template <typename Body, typename Allocator, typename Send>
-    ResponseData operator()(http::request<Body, http::basic_fields<Allocator>>&& req, Send&& send) {
-        auto string_path = DecodeURL(req.target());
-        std::string_view path(string_path);
-
-        switch(CheckRequest(path)) {
-            case RequestType::API_MAPS:
-                SendResponse(http::status::ok,
-                            json::serialize(ProcessMapsRequestBody()),
-                            req.version(),
-                            std::move(send),
-                            ContentType::APP_JSON);
-                return {http::status::ok, ContentType::APP_JSON};
-
-            case RequestType::API_MAP: {
-                auto request = SplitRequest(path.substr(1));
-                model::Map::Id id{std::string(request[3])};
-                if (const auto* map = game_.FindMap(id)) {
-                    SendResponse(http::status::ok,
-                                json::serialize(SerializeMap(map)),
-                                req.version(),
-                                std::move(send),
-                                ContentType::APP_JSON);
-                    return {http::status::ok, ContentType::APP_JSON};
-                } else {
-                    SendResponse(http::status::not_found,
-                                MAP_NOT_FOUND_HTTP_BODY,
-                                req.version(),
-                                std::move(send),
-                                ContentType::APP_JSON);
-                    return {http::status::not_found, ContentType::APP_JSON};
-                }
-            }
-
-            case RequestType::FILE:
-                return SendFileResponseOr404(path, std::move(send), req.version());
-
-            default:
-                return SendBadRequest(std::move(send), req.version());
-        }
-    }
-
-private:
     model::Game& game_;
     const fs::path root_path_;
 
-    constexpr static std::string_view BAD_REQUEST_HTTP_BODY =
-        R"({"code":"badRequest","message":"Bad request"})"sv;
-    constexpr static std::string_view MAP_NOT_FOUND_HTTP_BODY =
-        R"({"code":"mapNotFound","message":"Map not found"})"sv;
-    constexpr static std::string_view FILE_NOT_FOUND_HTTP_BODY =
-        R"({"code":"fileNotFound","message":"File not found"})"sv;
+    constexpr static std::string_view BAD_REQUEST_HTTP_BODY = R"({ "code": "badRequest", "message": "Bad request" })"sv;
+    constexpr static std::string_view MAP_NOT_FOUND_HTTP_BODY = R"({ "code": "mapNotFound", "message": "Map not found" })"sv;
+    constexpr static std::string_view FILE_NOT_FOUND_HTTP_BODY = R"({ "code": "fileNotFound", "message": "File not found" })"sv;
 
     template<typename Send>
     ResponseData SendBadRequest(Send&& send, unsigned http_version) const {
-        SendResponse(http::status::bad_request,
-                    BAD_REQUEST_HTTP_BODY,
-                    http_version,
-                    std::move(send),
-                    ContentType::APP_JSON);
-        return {http::status::bad_request, ContentType::APP_JSON};
+        SendResponse(http::status::bad_request, BAD_REQUEST_HTTP_BODY, http_version, std::move(send), ContentType::APP_JSON);
+        return { http::status::bad_request, ContentType::APP_JSON};
     }
 
     template<typename Send>
     ResponseData SendFileResponseOr404(std::string_view path, Send&& send, unsigned http_version) const {
-        std::string decoded_path = DecodeURL(path);
-        fs::path full_path = root_path_ / decoded_path;
-
-        if (!fs::exists(full_path) || !fs::is_regular_file(full_path)) {
-            SendResponse(http::status::not_found, FILE_NOT_FOUND_HTTP_BODY, http_version, std::move(send), ContentType::TEXT_PLAIN);
-            return {http::status::not_found, ContentType::TEXT_PLAIN};
-        }
-
-        // Определение Content-Type
-        std::string ext = full_path.extension().string().substr(1); // Удаляем точку
-        std::string_view content_type = ContentType::FromExtension(ext);
-
-        // Отправка файла
-        http::file_body::value_type file;
-        beast::error_code ec;
-        file.open(full_path.c_str(), beast::file_mode::read, ec);
-
-        if (ec) {
-            SendResponse(http::status::not_found, FILE_NOT_FOUND_HTTP_BODY, http_version, std::move(send), ContentType::TEXT_PLAIN);
-            return {http::status::not_found, ContentType::TEXT_PLAIN};
-        }
-
         http::response<http::file_body> res;
         res.version(http_version);
         res.result(http::status::ok);
-        res.set(http::field::content_type, content_type);
+        std::string full_path = root_path_.string() + path.data();
+        std::size_t ext_start = path.find_last_of('.', path.size());
+        std::string_view type = ContentType::TEXT_HTML;
+        if (ext_start != path.npos) {
+            type = mapper_(path.substr(ext_start + 1, path.size() - ext_start + 1));
+            res.insert(http::field::content_type, type);
+        }
+        else {
+            full_path = root_path_.string() + "/index.html";
+            res.insert(http::field::content_type, ContentType::TEXT_HTML);
+        }
+
+        http::file_body::value_type file;
+
+        if (sys::error_code ec; file.open(full_path.data(), beast::file_mode::read, ec), ec) {
+            SendResponse(http::status::not_found, FILE_NOT_FOUND_HTTP_BODY, http_version, std::move(send), ContentType::TEXT_PLAIN);
+            return { http::status::not_found , ContentType::TEXT_PLAIN };
+        }
+
         res.body() = std::move(file);
         res.prepare_payload();
-        send(std::move(res));
-
-        return {http::status::ok, content_type};
+        send(res);
+        return { http::status::ok, type };
     }
 
     template<typename Send>
-    void SendResponse(http::status status,
-                     std::string_view body,
-                     unsigned http_version,
-                     Send&& send,
-                     std::string_view type) const {
-        http::response<http::string_body> res(status, http_version);
-        res.set(http::field::content_type, type);
-        res.body() = body;
-        send(std::move(res));
+    void SendResponse(http::status status, std::string_view body, unsigned http_version, Send&& send, std::string_view type) const {
+        http::response<http::string_body> response(status, http_version);
+        response.insert(http::field::content_type, type);
+        response.body() = body;
+        send(response);
     }
 
     RequestType CheckRequest(std::string_view target) const;
     json::array ProcessMapsRequestBody() const;
-    std::string DecodeURL(std::string_view url) const;
+    std::string URLDecode(std::string_view url) const;
     static int HexToInt(char c);
+    static std::string_view GetMapperType(std::string_view extension) const;
 };
 
 class LoggingRequestHandler {
