@@ -168,52 +168,53 @@ private:
     }
 
     template<typename Send>
-    ResponseData HandleStaticFilesOr404(std::string_view path, Send&& send, unsigned http_version) const {
-        namespace fs = std::filesystem;
+	ResponseData HandleStaticFilesOr404(std::string_view path, Send&& send, unsigned http_version) const {
+    	using namespace http;
 
-    	// Формирование полного пути
-    	fs::path full_path = root_path_;
-    	full_path /= request_path.empty() ? "index.html" : request_path;
-
-    	// Определение MIME-типа
-    	std::string_view content_type = MimeType::TEXT_HTML;
-    	if (const auto ext = full_path.extension(); !ext.empty()) {
-        	content_type = GetMimeType(ext.string().substr(1));
-    	}
-
-    	// Подготовка ответа
-    	http::response<http::file_body> response;
+    	response<file_body> response;
     	response.version(http_version);
-    	response.set(http::field::content_type, content_type);
+    	response.result(status::ok);
 
-    	// Попытка открыть файл
-    	beast::error_code ec;
-    	response.body().open(full_path.c_str(), beast::file_mode::read, ec);
+    	const auto resolve_resource = [this](std::string_view uri_path) {
+        	const auto extension_pos = uri_path.find_last_of('.');
+        	std::string full_path = root_path_.string() + uri_path.data();
+        	std::string_view mime_type = MimeType::TEXT_HTML;
 
-    	if (ec) {
-        	// Fallback для index.html если путь был директорией
-        	if (request_path.empty() || request_path.back() == '/') {
-            	full_path = root_path_ / "index.html";
-            	response.body().open(full_path.c_str(), beast::file_mode::read, ec);
+        	if (extension_pos != uri_path.npos) {
+            	auto file_extension = uri_path.substr(extension_pos + 1);
+            	mime_type = GetMimeType(file_extension);
+        	} else {
+            	full_path = root_path_.string() + "/index.html";
         	}
 
-        if (ec) {
-            	SendErrorResponse(http::status::not_found,
-                             HttpBody::FILE_NOT_FOUND,
-                             http_version,
-                             std::forward<Send>(send));
-            	return {http::status::not_found, MimeType::TEXT_PLAIN};
-        	}
+        	return std::make_tuple(full_path, mime_type);
+    	};
+
+    	auto [file_path, content_type] = resolve_resource(path);
+    	response.set(field::content_type, content_type);
+
+    	file_body::value_type file_stream;
+    	sys::error_code file_error;
+
+    	file_stream.open(file_path.c_str(), beast::file_mode::read, file_error);
+
+    	if (file_error) {
+        	HandleResponse(
+            	status::not_found,
+            	RequestHttpBody::FILE_NOT_FOUND_HTTP_BODY,
+            	http_version,
+            	std::forward<Send>(send),
+            	MimeType::TEXT_PLAIN
+        	);
+        	return {status::not_found, MimeType::TEXT_PLAIN};
     	}
 
-    	// Отправка успешного ответа
-    	response.result(response.body().is_open() ? http::status::ok
-                                            : http::status::not_found);
+    	response.body() = std::move(file_stream);
     	response.prepare_payload();
     	send(std::move(response));
 
-    	return {http::status::ok, content_type};
-    }
+    	return {status::ok, content_type};
+	}
 
     template<typename Send>
     void HandleResponse(http::status status, std::string_view body, unsigned http_version, Send&& send, std::string_view type) const {
