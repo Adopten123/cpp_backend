@@ -1,6 +1,7 @@
 #pragma once
 #include "http_server.h"
 #include "model.h"
+#include "player.h"
 
 #include <boost/asio/io_context.hpp>
 #include <boost/json.hpp>
@@ -52,8 +53,13 @@ struct MimeType {
 struct RestApiLiterals {
     RestApiLiterals() = delete;
     constexpr static std::string_view API = "api"sv;
+    constexpr static std::string_view API_V1 = "/api/v1/"sv;
     constexpr static std::string_view VERSION_1 = "v1"sv;
     constexpr static std::string_view MAPS = "maps"sv;
+    constexpr static std::string_view MAP = "map"sv;
+    constexpr static std::string_view GAME = "game"sv;
+    constexpr static std::string_view JOIN = "join"sv;
+    constexpr static std::string_view PLAYERS = "players"sv;
 };
 
 struct RequestHttpBody {
@@ -158,7 +164,7 @@ public:
     }
 
     template<typename Send>
-    static ResponseData SendMethodNotAllowed(unsigned http_version, Send&& send, std::string_view allow) {
+    static ResponseData HandleMethodNotAllowed(unsigned http_version, Send&& send, std::string_view allow) {
         http::response<http::string_body> response(http::status::method_not_allowed, http_version);
         response.insert(http::field::content_type, MimeType::APP_JSON);
         response.insert(http::field::cache_control, "no-cache");
@@ -181,7 +187,7 @@ public:
 
     explicit PlayerSessionAPIHandler(model::Game& game, net::io_context& ioc)
         : game_{ game }
-        , strand_(net::make_strand(ioc) {
+        , strand_(net::make_strand(ioc)) {
     }
 
     PlayerSessionAPIHandler(const PlayerSessionAPIHandler&) = delete;
@@ -189,7 +195,8 @@ public:
 
     template <typename Send>
     ResponseData ProcessRequest(std::string_view target, unsigned http_version,
-                 std::string_view method, Send&& send, const json::object& body, const std::string_view bearer) {
+                 std::string_view method, Send&& send, const json::object& body, const std::string_view bearer)
+    {
         auto unslashed = target.substr(1, target.length() - 1);
         auto splitted = SplitRequest(unslashed);
 
@@ -203,17 +210,11 @@ public:
                 const auto* map = game_.FindMap(id);
                 if (map) {
                     HttpResponseFactory::HandleAPIResponse(http::status::ok, json::serialize(SerializeMap(map)), http_version, std::move(send));
-                    return {
-                        http::status::ok,
-                        MimeType::APP_JSON
-                    };
+                    return { http::status::ok,MimeType::APP_JSON };
                 }
                 else {
                     HttpResponseFactory::HandleAPIResponse(http::status::not_found, RequestHttpBody::MAP_NOT_FOUND, http_version, std::move(send));
-                    return {
-                        http::status::not_found,
-                        MimeType::APP_JSON
-                    };
+                    return { http::status::not_found, MimeType::APP_JSON };
                 }
             }
             if (splitted.size() == 3) {
@@ -299,7 +300,7 @@ public:
                     if (method != "GET" && method != "HEAD")
                         return HttpResponseFactory::HandleMethodNotAllowed(http_version, std::move(send), "GET, HEAD");
                     std::string token = "";
-                    auto token_valid = ParseBearer(std::move(bearer), token);
+                    auto token_valid = ExtractBearerTokenFromHeader(std::move(bearer), token);
                     if (!token_valid) {
                         HttpResponseFactory::HandleAPIResponse(http::status::unauthorized, RequestHttpBody::INVALID_TOKEN, http_version, std::move(send));
                         return {
@@ -351,12 +352,13 @@ public:
     RequestHandler& operator=(const RequestHandler&) = delete;
 
     template <typename Body, typename Allocator, typename Send>
-    ResponseData operator()(http::request<Body, http::basic_fields<Allocator>>&& req, Send&& send) {
-        auto string_path = URLDecode(req.target());
-        std::string_view path(string_path);
-
-        switch(CheckRequest(path)) {
+    void operator()(http::request<Body, http::basic_fields<Allocator>>&& req, Send&& send, std::function<void(ResponseData&&)> handle) {
+        unsigned version = req.version();
+        auto string_target = URLDecode(req.target());
+        std::string_view target(string_target);
+        switch(CheckRequest(target)) {
         case RequestType::API:
+        {
             json::object body;
             if (req.body().size() != 0) {
                 try {
@@ -370,13 +372,14 @@ public:
             net::dispatch(api_handler_->GetStrand(), [self = shared_from_this(), string_target_ = std::move(string_target)
                                                      , req_ = std::move(req), send_ = std::move(send), api_handler__ = api_handler_->shared_from_this()
                                                      , handle, body_ = std::move(body)]() {
-                    handle(api_handler_->ProcessRequest(std::string_view(string_target_), (unsigned)(req_.version()), std::string_view(req_.method_string().data())
+                    handle(api_handler__->ProcessRequest(std::string_view(string_target_), (unsigned)(req_.version()), std::string_view(req_.method_string().data())
                                         , std::move(send_), body_, req_.base()[http::field::authorization]));
                 });
             return;
             break;
+        }
         case RequestType::FILE:
-            return handle(HttpResponseFactory::HandleStaticFilesOr404(path, std::move(send), req.version()));
+            return handle(HttpResponseFactory::HandleFileResponseOr404(root_path_, target, std::move(send), req.version()));
             break;
         case RequestType::BAD_REQUEST:
             return handle(HttpResponseFactory::HandleBadRequest(std::move(send), req.version()));
@@ -391,7 +394,6 @@ private:
     friend PlayerSessionAPIHandler;
 
     enum RequestType {
-        API,
         API,
         FILE,
         BAD_REQUEST
