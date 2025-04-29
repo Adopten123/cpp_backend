@@ -20,19 +20,19 @@ model::Road ParseRoad(const json::value& road_json){
 
 }
 model::Building ParseBuilding(const json::value& building_json) {
-	int x = building_json.at("x").as_int64();;;
-    int y = building_json.at("y").as_int64();;;
-    int w = building_json.at("w").as_int64();;;
-    int h = building_json.at("h").as_int64();;;
+	int x = building_json.at("x").as_int64();
+    int y = building_json.at("y").as_int64();
+    int w = building_json.at("w").as_int64();
+    int h = building_json.at("h").as_int64();
 
     return model::Building{model::Rectangle{{x, y}, {w, h}}};
 }
 model::Office ParseOffice(const json::value& office_json) {
 	std::string id = office_json.at("id").as_string().c_str();
-    int x = office_json.at("x").as_int64();;;
-    int y = office_json.at("y").as_int64();;;
-    int offsetX = office_json.at("offsetX").as_int64();;;
-    int offsetY = office_json.at("offsetY").as_int64();;;
+    int x = office_json.at("x").as_int64();
+    int y = office_json.at("y").as_int64();
+    int offsetX = office_json.at("offsetX").as_int64();
+    int offsetY = office_json.at("offsetY").as_int64();
 
     return model::Office(model::Office::Id{id}, {x, y}, {offsetX, offsetY});
 }

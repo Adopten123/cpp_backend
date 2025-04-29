@@ -25,8 +25,8 @@ namespace fs = std::filesystem;
 namespace sys = boost::system;
 namespace logging = boost::log;
 
-struct ContentType {
-    ContentType() = delete;
+struct MimeType {
+    MimeType() = delete;
     constexpr static std::string_view TEXT_HTML = "text/html"sv;
     constexpr static std::string_view APP_JSON = "application/json"sv;
     constexpr static std::string_view TEXT_CSS = "text/css"sv;
@@ -86,11 +86,11 @@ public:
                 json::serialize(ProcessMapsRequestBody()),
                 req.version(),
                 std::move(send),
-                ContentType::APP_JSON
+                MimeType::APP_JSON
             );
             return {
                 http::status::ok ,
-                ContentType::APP_JSON
+                MimeType::APP_JSON
             };
             break;
         case RequestType::API_MAP:
@@ -105,24 +105,24 @@ public:
                     json::serialize(SerializeMap(map)),
                     req.version(),
                     std::move(send),
-                    ContentType::APP_JSON
+                    MimeType::APP_JSON
                 );
                 return {
                     http::status::ok ,
-                    ContentType::APP_JSON
+                    MimeType::APP_JSON
                 };
             }
             else {
                 SendResponse(
                     http::status::not_found,
-                    MAP_NOT_FOUND_HTTP_BODY,
+                    RequestHttpBody::MAP_NOT_FOUND_HTTP_BODY,
                     req.version(),
                     std::move(send),
-                    ContentType::APP_JSON
+                    MimeType::APP_JSON
                 );
                 return {
                     http::status::not_found,
-                    ContentType::APP_JSON
+                    MimeType::APP_JSON
                 };
             }
             break;
@@ -147,17 +147,20 @@ private:
         BAD_REQUEST
     };
 
+    struct RequestHttpBody {
+    	RequestHttpBody() = delete;
+        constexpr static std::string_view BAD_REQUEST_HTTP_BODY = R"({ "code": "badRequest", "message": "Bad request" })"sv;
+    	constexpr static std::string_view MAP_NOT_FOUND_HTTP_BODY = R"({ "code": "mapNotFound", "message": "Map not found" })"sv;
+    	constexpr static std::string_view FILE_NOT_FOUND_HTTP_BODY = R"({ "code": "fileNotFound", "message": "File not found" })"sv;
+    }
+
     model::Game& game_;
     const fs::path root_path_;
 
-    constexpr static std::string_view BAD_REQUEST_HTTP_BODY = R"({ "code": "badRequest", "message": "Bad request" })"sv;
-    constexpr static std::string_view MAP_NOT_FOUND_HTTP_BODY = R"({ "code": "mapNotFound", "message": "Map not found" })"sv;
-    constexpr static std::string_view FILE_NOT_FOUND_HTTP_BODY = R"({ "code": "fileNotFound", "message": "File not found" })"sv;
-
     template<typename Send>
     ResponseData SendBadRequest(Send&& send, unsigned http_version) const {
-        SendResponse(http::status::bad_request, BAD_REQUEST_HTTP_BODY, http_version, std::move(send), ContentType::APP_JSON);
-        return { http::status::bad_request, ContentType::APP_JSON};
+        SendResponse(http::status::bad_request, RequestHttpBody::BAD_REQUEST_HTTP_BODY, http_version, std::move(send), MimeType::APP_JSON);
+        return { http::status::bad_request, MimeType::APP_JSON};
     }
 
     template<typename Send>
@@ -167,21 +170,21 @@ private:
         res.result(http::status::ok);
         std::string full_path = root_path_.string() + path.data();
         std::size_t ext_start = path.find_last_of('.', path.size());
-        std::string_view type = ContentType::TEXT_HTML;
+        std::string_view type = MimeType::TEXT_HTML;
         if (ext_start != path.npos) {
             type = GetMapperType(path.substr(ext_start + 1, path.size() - ext_start + 1));
             res.insert(http::field::content_type, type);
         }
         else {
             full_path = root_path_.string() + "/index.html";
-            res.insert(http::field::content_type, ContentType::TEXT_HTML);
+            res.insert(http::field::content_type, MimeType::TEXT_HTML);
         }
 
         http::file_body::value_type file;
 
         if (sys::error_code ec; file.open(full_path.data(), beast::file_mode::read, ec), ec) {
-            SendResponse(http::status::not_found, FILE_NOT_FOUND_HTTP_BODY, http_version, std::move(send), ContentType::TEXT_PLAIN);
-            return { http::status::not_found , ContentType::TEXT_PLAIN };
+            SendResponse(http::status::not_found, RequestHttpBody::FILE_NOT_FOUND_HTTP_BODY, http_version, std::move(send), MimeType::TEXT_PLAIN);
+            return { http::status::not_found , MimeType::TEXT_PLAIN };
         }
 
         res.body() = std::move(file);

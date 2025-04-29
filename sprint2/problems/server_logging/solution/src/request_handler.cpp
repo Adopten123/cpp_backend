@@ -83,7 +83,9 @@ RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target
     auto parts = SplitRequest(target.substr(1, target.length() - 1));
     if (parts.size() >= 3
         and parts[1] == RestApiLiterals::VERSION_1
-        and parts[2] == RestApiLiterals::MAPS) {
+        and parts[2] == RestApiLiterals::MAPS
+        )
+    {
             if (parts.size() == 3)
                 return RequestHandler::RequestType::API_MAPS;
             else if (parts.size() == 4)
@@ -147,18 +149,18 @@ int RequestHandler::HexToInt(char c) {
 
 std::string_view RequestHandler::GetMapperType(std::string_view extension) {
     static const std::unordered_map<std::string_view, std::string_view> mime_types = {
-        {"html", ContentType::TEXT_HTML}, {"htm", ContentType::TEXT_HTML}, {"json", ContentType::APP_JSON},
-        {"css", ContentType::TEXT_CSS}, {"txt", ContentType::TEXT_PLAIN}, {"js", ContentType::TEXT_JAVASCRIPT},
-        {"xml", ContentType::APP_XML}, {"png", ContentType::PNG}, {"jpeg", ContentType::JPEG}, {"jpg", ContentType::JPEG},
-        {"jpe", ContentType::JPEG}, {"gif", ContentType::GIF}, {"bmp", ContentType::BMP}, {"ico", ContentType::ICO},
-        {"tiff", ContentType::TIFF}, {"tif", ContentType::TIFF}, {"svg", ContentType::SVG}, {"svgz", ContentType::SVG},
-        {"mp3", ContentType::MP3},
+        {"html", MimeType::TEXT_HTML}, {"htm", MimeType::TEXT_HTML}, {"json", MimeType::APP_JSON},
+        {"css", MimeType::TEXT_CSS}, {"txt", MimeType::TEXT_PLAIN}, {"js", MimeType::TEXT_JAVASCRIPT},
+        {"xml", MimeType::APP_XML}, {"png", MimeType::PNG}, {"jpeg", MimeType::JPEG}, {"jpg", MimeType::JPEG},
+        {"jpe", MimeType::JPEG}, {"gif", MimeType::GIF}, {"bmp", MimeType::BMP}, {"ico", MimeType::ICO},
+        {"tiff", MimeType::TIFF}, {"tif", MimeType::TIFF}, {"svg", MimeType::SVG}, {"svgz", MimeType::SVG},
+        {"mp3", MimeType::MP3},
     };
 
     if (mime_types.contains(extension)) {
         return mime_types.at(extension);
     }
-    return ContentType::UNKNOWN;
+    return MimeType::UNKNOWN;
 }
 
 void LoggingRequestHandler::LogResponse(const RequestHandler::ResponseData& r, double response_time, const boost::beast::net::ip::address& address) {
