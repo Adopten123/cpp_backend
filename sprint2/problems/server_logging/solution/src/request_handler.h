@@ -81,7 +81,7 @@ public:
 
         switch(CheckRequest(path)) {
         case RequestType::API_MAPS:
-            SendResponse(
+            HandleResponse(
                 http::status::ok,
                 json::serialize(ProcessMapsRequestBody()),
                 req.version(),
@@ -100,7 +100,7 @@ public:
             model::Map::Id id(id_text);
             const auto* map = game_.FindMap(id);
             if (map) {
-                SendResponse(
+                HandleResponse(
                     http::status::ok,
                     json::serialize(SerializeMap(map)),
                     req.version(),
@@ -113,7 +113,7 @@ public:
                 };
             }
             else {
-                SendResponse(
+                HandleResponse(
                     http::status::not_found,
                     RequestHttpBody::MAP_NOT_FOUND_HTTP_BODY,
                     req.version(),
@@ -128,13 +128,13 @@ public:
             break;
         }
         case RequestType::FILE:
-            return SendFileResponseOr404(path, std::move(send), req.version());
+            return HandleStaticFilesOr404(path, std::move(send), req.version());
             break;
         case RequestType::BAD_REQUEST:
-            return SendBadRequest(std::move(send), req.version());
+            return HandleBadRequest(std::move(send), req.version());
             break;
         default:
-            return SendBadRequest(std::move(send), req.version());
+            return HandleBadRequest(std::move(send), req.version());
             break;
         }
     }
@@ -152,19 +152,23 @@ private:
         constexpr static std::string_view BAD_REQUEST_HTTP_BODY = R"({ "code": "badRequest", "message": "Bad request" })"sv;
     	constexpr static std::string_view MAP_NOT_FOUND_HTTP_BODY = R"({ "code": "mapNotFound", "message": "Map not found" })"sv;
     	constexpr static std::string_view FILE_NOT_FOUND_HTTP_BODY = R"({ "code": "fileNotFound", "message": "File not found" })"sv;
-    }
+    };
 
     model::Game& game_;
     const fs::path root_path_;
 
     template<typename Send>
-    ResponseData SendBadRequest(Send&& send, unsigned http_version) const {
-        SendResponse(http::status::bad_request, RequestHttpBody::BAD_REQUEST_HTTP_BODY, http_version, std::move(send), MimeType::APP_JSON);
-        return { http::status::bad_request, MimeType::APP_JSON};
+    ResponseData HandleBadRequest(Send&& send, unsigned http_version) const {
+        HandleResponse(http::status::bad_request, RequestHttpBody::BAD_REQUEST_HTTP_BODY, http_version, std::move(send), MimeType::APP_JSON);
+
+        return {
+            http::status::bad_request,
+            MimeType::APP_JSON
+        };
     }
 
     template<typename Send>
-    ResponseData SendFileResponseOr404(std::string_view path, Send&& send, unsigned http_version) const {
+    ResponseData HandleStaticFilesOr404(std::string_view path, Send&& send, unsigned http_version) const {
         http::response<http::file_body> res;
         res.version(http_version);
         res.result(http::status::ok);
@@ -183,18 +187,24 @@ private:
         http::file_body::value_type file;
 
         if (sys::error_code ec; file.open(full_path.data(), beast::file_mode::read, ec), ec) {
-            SendResponse(http::status::not_found, RequestHttpBody::FILE_NOT_FOUND_HTTP_BODY, http_version, std::move(send), MimeType::TEXT_PLAIN);
-            return { http::status::not_found , MimeType::TEXT_PLAIN };
+            HandleResponse(http::status::not_found, RequestHttpBody::FILE_NOT_FOUND_HTTP_BODY, http_version, std::move(send), MimeType::TEXT_PLAIN);
+            return {
+                http::status::not_found,
+                MimeType::TEXT_PLAIN
+            };
         }
 
         res.body() = std::move(file);
         res.prepare_payload();
         send(res);
-        return { http::status::ok, type };
+        return {
+            http::status::ok,
+            type
+        };
     }
 
     template<typename Send>
-    void SendResponse(http::status status, std::string_view body, unsigned http_version, Send&& send, std::string_view type) const {
+    void HandleResponse(http::status status, std::string_view body, unsigned http_version, Send&& send, std::string_view type) const {
         http::response<http::string_body> response(status, http_version);
         response.insert(http::field::content_type, type);
         response.body() = body;
