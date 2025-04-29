@@ -372,7 +372,7 @@ public:
             net::dispatch(api_handler_->GetStrand(), [self = shared_from_this(), string_target_ = std::move(string_target)
                                                      , req_ = std::move(req), send_ = std::move(send), api_handler__ = api_handler_->shared_from_this()
                                                      , handle, body_ = std::move(body)]() {
-                    handle(api_handler_->ProcessRequest(std::string_view(string_target_), (unsigned)(req_.version()), std::string_view(req_.method_string().data())
+                    handle(api_handler__->ProcessRequest(std::string_view(string_target_), (unsigned)(req_.version()), std::string_view(req_.method_string().data())
                                         , std::move(send_), body_, req_.base()[http::field::authorization]));
                 });
             return;
