@@ -31,7 +31,7 @@ private:
         std::uniform_int_distribution<std::mt19937_64::result_type> dist;
         return dist(random_device_);
     }() };
-}
+};
 
 class Player {
 public:
@@ -57,7 +57,7 @@ private:
     model::GameSession* session_;
     model::Dog* dog_;
     Token token_;
-}
+};
 
 class Players {
 public:
@@ -71,5 +71,5 @@ private:
     TokensByPlayers tokens_by_players_;
     PlayerToken token_;
 
-}
+};
 } // namespace app
