@@ -171,7 +171,7 @@ std::string_view HttpResponseFactory::GetMimeType(std::string_view extension) {
 //----------------------------------------------------------------------------------------------------------------------
 //--------------------------------------------LoggingRequestHandler-----------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
-void LoggingRequestHandler::LogResponse(const RequestHandler::ResponseData& r,
+void LoggingRequestHandler::LogResponse(const ResponseData& r,
                                         double response_time,
                                         const boost::beast::net::ip::address& address)
 {

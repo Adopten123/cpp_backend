@@ -70,7 +70,7 @@ struct RequestHttpBody {
     constexpr static std::string_view INVALID_NAME = R"({ "code": "invalidArgument", "message": "Invalid name" })"sv;
     constexpr static std::string_view JOIN_GAME_PARSE_ERROR = R"({ "code": "invalidArgument", "message": "Join game request parse error" })"sv;
     constexpr static std::string_view METHOD_NOT_ALLOWED = R"({ "code": "invalidMethod", "message": "Another method expected" })"sv;
-    constexpr static std::string_view INVALID_TOKEN_ = R"({ "code": "invalidToken", "message": "Authorization header is missing" })"sv;
+    constexpr static std::string_view INVALID_TOKEN = R"({ "code": "invalidToken", "message": "Authorization header is missing" })"sv;
     constexpr static std::string_view TOKEN_UNKNOWN = R"({ "code": "unknownToken", "message": "Player token has not been found" })"sv;
 };
 
@@ -181,7 +181,7 @@ private:
     static std::string_view GetMimeType(std::string_view extension);
 };
 
-class PlayerSessionAPIHandler : public std::enable_shared_from_this<APIRequestHandler> {
+class PlayerSessionAPIHandler : public std::enable_shared_from_this<PlayerSessionAPIHandler> {
 public:
     using Strand = net::strand<net::io_context::executor_type>;
 
@@ -372,14 +372,14 @@ public:
             net::dispatch(api_handler_->GetStrand(), [self = shared_from_this(), string_target_ = std::move(string_target)
                                                      , req_ = std::move(req), send_ = std::move(send), api_handler__ = api_handler_->shared_from_this()
                                                      , handle, body_ = std::move(body)]() {
-                    handle(api_handler__->ProcessRequest(std::string_view(string_target_), (unsigned)(req_.version()), std::string_view(req_.method_string().data())
+                    handle(api_handler_->ProcessRequest(std::string_view(string_target_), (unsigned)(req_.version()), std::string_view(req_.method_string().data())
                                         , std::move(send_), body_, req_.base()[http::field::authorization]));
                 });
             return;
             break;
         }
         case RequestType::FILE:
-            return handle(HttpResponseFactory::HandleFileResponseOr404(root_path_, target, std::move(send), req.version()));
+            return handle(HttpResponseFactory::HandleStaticFilesOr404(root_path_, target, std::move(send), req.version()));
             break;
         case RequestType::BAD_REQUEST:
             return handle(HttpResponseFactory::HandleBadRequest(std::move(send), req.version()));
@@ -426,7 +426,7 @@ public:
     void operator () (http::request<Body, http::basic_fields<Allocator>>&& req, Send&& send, const boost::beast::net::ip::address& address) {
         LogRequest(req, address);
         boost::chrono::system_clock::time_point start = boost::chrono::system_clock::now();
-        RequestHandler::ResponseData resp_data = decorated_(std::move(req), std::move(send));
+        ResponseData resp_data = decorated_(std::move(req), std::move(send));
         boost::chrono::duration<double> response_time = boost::chrono::system_clock::now() - start;
         LogResponse(resp_data, response_time.count(), address);
     }
@@ -442,7 +442,7 @@ private:
         request_data["method"] = r.method_string().data();
         BOOST_LOG_TRIVIAL(info) << logging::add_value(data, request_data) << "request received";
     }
-    static void LogResponse(const RequestHandler::ResponseData& r, double response_time, const boost::beast::net::ip::address& address);
+    static void LogResponse(const ResponseData& r, double response_time, const boost::beast::net::ip::address& address);
 };
 
 }  // namespace http_handler

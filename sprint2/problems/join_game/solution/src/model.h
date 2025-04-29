@@ -261,6 +261,7 @@ private:
 
     std::vector<Map> maps_;
     MapIdToIndex map_id_to_index_;
+    std::vector<GameSession> sessions_;
 };
 
 }  // namespace model
