@@ -1,4 +1,5 @@
 #include "player.h"
+#include "model.h"
 
 namespace app {
 
@@ -23,5 +24,7 @@ const Player* Players::FindByToken(const Token& token) const {
 
     return nullptr;
 }
+
+int Player::id_counter_ = 0;
 
 }

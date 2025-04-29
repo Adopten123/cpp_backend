@@ -49,4 +49,6 @@ namespace model {
         }
     }
 
+    int Dog::id_counter_ = 0;
+
 }  // namespace model

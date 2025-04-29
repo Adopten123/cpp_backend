@@ -208,7 +208,7 @@ public:
         return name_;
     }
 private:
-    static int id_counter_ = 0;
+    static int id_counter_;
     static int GetNextId() noexcept {
     	return id_counter_++;
     }

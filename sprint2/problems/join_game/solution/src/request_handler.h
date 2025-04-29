@@ -102,54 +102,35 @@ public:
     }
 
     template<typename Send>
-	ResponseData HandleStaticFilesOr404(std::string_view path, Send&& send, unsigned http_version, bool is_head_request = false) const {
-    	using namespace http;
+	ResponseData HandleStaticFilesOr404(const fs::path root_path, std::string_view path, Send&& send, unsigned http_version, bool is_head_request = false) const {
+        http::response<http::file_body> res;
+        res.version(http_version);
+        res.result(http::status::ok);
+        std::string full_path = root_path.string() + path.data();
+        std::size_t ext_start = path.find_last_of('.', path.size());
+        std::string_view type = MimeType::TEXT_HTML;
+        if (ext_start != path.npos) {
+            type = GetMimeType(path.substr(ext_start + 1, path.size() - ext_start + 1));
+            res.insert(http::field::content_type, type);
+        }
+        else {
+            full_path = root_path.string() + "/index.html";
+            res.insert(http::field::content_type, MimeType::TEXT_HTML);
+        }
 
-    	response<file_body> response;
-    	response.version(http_version);
-    	response.result(status::ok);
+        http::file_body::value_type file;
 
-    	const auto resolve_resource = [this](std::string_view uri_path) {
-        	const auto extension_pos = uri_path.find_last_of('.');
-        	std::string full_path = root_path_.string() + uri_path.data();
-        	std::string_view mime_type = MimeType::TEXT_HTML;
+        if (sys::error_code ec; file.open(full_path.data(), beast::file_mode::read, ec), ec) {
+            SendResponse(http::status::not_found, RequestHttpBody::FILE_NOT_FOUND, http_version, std::move(send), MimeType::TEXT_PLAIN, is_head_request);
+            return { http::status::not_found , MimeType::TEXT_PLAIN };
+        }
 
-        	if (extension_pos != uri_path.npos) {
-            	auto file_extension = uri_path.substr(extension_pos + 1);
-            	mime_type = GetMimeType(file_extension);
-        	} else {
-            	full_path = root_path_.string() + "/index.html";
-        	}
-
-        	return std::make_tuple(full_path, mime_type);
-    	};
-
-    	auto [file_path, content_type] = resolve_resource(path);
-    	response.set(field::content_type, content_type);
-
-    	file_body::value_type file_stream;
-    	sys::error_code file_error;
-
-    	file_stream.open(file_path.c_str(), beast::file_mode::read, file_error);
-
-    	if (file_error) {
-        	HandleResponse(
-            	status::not_found,
-            	RequestHttpBody::FILE_NOT_FOUND,
-            	http_version,
-            	std::forward<Send>(send),
-            	MimeType::TEXT_PLAIN,
-                is_head_request
-        	);
-        	return {status::not_found, MimeType::TEXT_PLAIN};
-    	}
-        if(!is_head_request)
-            response.body() = std::move(file_stream);
-
-    	response.prepare_payload();
-    	send(std::move(response));
-
-    	return {status::ok, content_type};
+        if (!is_head_request) {
+            res.body() = std::move(file);
+        }
+        res.prepare_payload();
+        send(res);
+        return { http::status::ok, type };
 	}
 
     template<typename Send>
@@ -164,12 +145,12 @@ public:
     }
 
     template<typename Send>
-    static void HandleAPIResponse(http::status status, std::string_view body, unsigned http_version, Send&& send, bool is_head_method = false) {
+    static void HandleAPIResponse(http::status status, std::string_view body, unsigned http_version, Send&& send, bool is_head_request = false) {
         http::response<http::string_body> response(status, http_version);
-        response.insert(http::field::content_type, ContentType::APP_JSON);
+        response.insert(http::field::content_type, MimeType::APP_JSON);
         response.insert(http::field::cache_control, "no-cache");
 
-        if (!is_head_method)
+        if (!is_head_request)
             response.body() = body;
 
         response.prepare_payload();
@@ -179,7 +160,7 @@ public:
     template<typename Send>
     static ResponseData SendMethodNotAllowed(unsigned http_version, Send&& send, std::string_view allow) {
         http::response<http::string_body> response(http::status::method_not_allowed, http_version);
-        response.insert(http::field::content_type, ContentType::APP_JSON);
+        response.insert(http::field::content_type, MimeType::APP_JSON);
         response.insert(http::field::cache_control, "no-cache");
         response.insert(http::field::allow, allow);
         response.body() = RequestHttpBody::METHOD_NOT_ALLOWED;
@@ -187,7 +168,7 @@ public:
 
         return {
             http::status::method_not_allowed,
-            ContentType::APP_JSON
+            MimeType::APP_JSON
         };
     }
 private:
@@ -224,20 +205,20 @@ public:
                     HttpResponseFactory::HandleAPIResponse(http::status::ok, json::serialize(SerializeMap(map)), http_version, std::move(send));
                     return {
                         http::status::ok,
-                        ContentType::APP_JSON
+                        MimeType::APP_JSON
                     };
                 }
                 else {
                     HttpResponseFactory::HandleAPIResponse(http::status::not_found, RequestHttpBody::MAP_NOT_FOUND, http_version, std::move(send));
                     return {
                         http::status::not_found,
-                        ContentType::APP_JSON
+                        MimeType::APP_JSON
                     };
                 }
             }
             if (splitted.size() == 3) {
                 HttpResponseFactory::HandleAPIResponse(http::status::ok, json::serialize(ProcessMapsRequestBody()), http_version, std::move(send));
-                return { http::status::ok , ContentType::APP_JSON };
+                return { http::status::ok , MimeType::APP_JSON };
             }
             if (splitted[2] == RestApiLiterals::MAP) {
                 if (splitted.size() != 4)
@@ -249,14 +230,14 @@ public:
                     HttpResponseFactory::HandleAPIResponse(http::status::ok, json::serialize(SerializeMap(map)), http_version, std::move(send));
                     return {
                         http::status::ok ,
-                        ContentType::APP_JSON
+                        MimeType::APP_JSON
                     };
                 }
                 else {
                     HttpResponseFactory::HandleAPIResponse(http::status::not_found, RequestHttpBody::MAP_NOT_FOUND, http_version, std::move(send));
                     return {
                         http::status::not_found ,
-                        ContentType::APP_JSON
+                        MimeType::APP_JSON
                     };
                 }
             }
@@ -271,7 +252,7 @@ public:
                         HttpResponseFactory::HandleAPIResponse(http::status::bad_request, RequestHttpBody::JOIN_GAME_PARSE_ERROR, http_version, std::move(send));
                         return {
                             http::status::bad_request,
-                            ContentType::APP_JSON
+                            MimeType::APP_JSON
                         };
                     }
                     auto user_name = body.at("userName").get_string();
@@ -279,14 +260,14 @@ public:
                         HttpResponseFactory::HandleAPIResponse(http::status::bad_request, RequestHttpBody::INVALID_NAME, http_version, std::move(send));
                         return {
                             http::status::bad_request,
-                            ContentType::APP_JSON
+                            MimeType::APP_JSON
                         };
                     }
                     if (!body.contains("mapId") || !body.at("mapId").is_string()) {
                         HttpResponseFactory::HandleAPIResponse(http::status::bad_request, RequestHttpBody::JOIN_GAME_PARSE_ERROR, http_version, std::move(send));
                         return {
                             http::status::bad_request,
-                            ContentType::APP_JSON
+                            MimeType::APP_JSON
                         };
                     }
                     auto map_id = body.at("mapId").get_string();
@@ -296,7 +277,7 @@ public:
                         HttpResponseFactory::HandleAPIResponse(http::status::not_found, RequestHttpBody::MAP_NOT_FOUND, http_version, std::move(send));
                         return {
                             http::status::not_found,
-                            ContentType::APP_JSON
+                            MimeType::APP_JSON
                         };
                     }
                     model::Dog dog{ std::move(std::string(user_name.data())) };
@@ -311,7 +292,7 @@ public:
                     HttpResponseFactory::HandleAPIResponse(http::status::ok, json::serialize(result), http_version, std::move(send));
                     return {
                         http::status::ok,
-                        ContentType::APP_JSON
+                        MimeType::APP_JSON
                     };
                 }
                 if (splitted[3] == RestApiLiterals::PLAYERS) {
@@ -323,7 +304,7 @@ public:
                         HttpResponseFactory::HandleAPIResponse(http::status::unauthorized, RequestHttpBody::INVALID_TOKEN, http_version, std::move(send));
                         return {
                             http::status::unauthorized,
-                            ContentType::APP_JSON
+                            MimeType::APP_JSON
                         };
                     }
                     auto* player = players_.FindByToken(app::Token(token.data()));
@@ -331,7 +312,7 @@ public:
                         HttpResponseFactory::HandleAPIResponse(http::status::unauthorized, RequestHttpBody::TOKEN_UNKNOWN, http_version, std::move(send));
                         return {
                             http::status::unauthorized,
-                            ContentType::APP_JSON
+                            MimeType::APP_JSON
                         };
                     }
                     auto dogs = player->GetSession()->GetDogs();
@@ -341,7 +322,7 @@ public:
                     HttpResponseFactory::HandleAPIResponse(http::status::ok, json::serialize(result), http_version, std::move(send));
                     return {
                         http::status::ok,
-                        ContentType::APP_JSON
+                        MimeType::APP_JSON
                     };
                 }
             }
@@ -383,7 +364,7 @@ public:
                 }
                 catch (...) {
                     HttpResponseFactory::HandleAPIResponse(http::status::bad_request, RequestHttpBody::JOIN_GAME_PARSE_ERROR, req.version(), std::move(send));
-                    return handle({ http::status::bad_request, ContentType::APP_JSON });
+                    return handle({ http::status::bad_request, MimeType::APP_JSON });
                 }
             }
             net::dispatch(api_handler_->GetStrand(), [self = shared_from_this(), string_target_ = std::move(string_target)
@@ -408,6 +389,7 @@ public:
 
 private:
     friend PlayerSessionAPIHandler;
+
     enum RequestType {
         API,
         API,
