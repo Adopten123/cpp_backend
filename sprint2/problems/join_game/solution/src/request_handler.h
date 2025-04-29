@@ -192,7 +192,7 @@ public:
     }
 private:
     static std::string_view GetMimeType(std::string_view extension);
-}
+};
 
 class PlayerSessionAPIHandler : public std::enable_shared_from_this<APIRequestHandler> {
 public:
@@ -357,14 +357,13 @@ private:
 
     json::array ProcessMapsRequestBody() const;
     bool ExtractBearerTokenFromHeader(const std::string_view auth_header, std::string& token_to_write) const;
-}
+};
 
 class RequestHandler : public std::enable_shared_from_this<RequestHandler> {
 public:
     explicit RequestHandler(model::Game& game, const char* path_to_static, net::io_context& ioc)
         : game_{ game }
-        , root_path_(path_to_static)
-        , {
+        , root_path_(path_to_static) {
     }
 
     RequestHandler(const RequestHandler&) = delete;

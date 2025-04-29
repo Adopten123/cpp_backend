@@ -215,7 +215,7 @@ private:
 
     const int id_;
     std::string name_;
-}
+};
 
 class GameSession {
 public:
@@ -231,7 +231,7 @@ private:
 
 	std::vector<Dog> dogs_;
     Map* map_;
-}
+};
 
 class Game {
 public:
