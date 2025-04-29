@@ -227,7 +227,7 @@ private:
     json::array ProcessMapsRequestBody() const;
     std::string URLDecode(std::string_view url) const;
     static int HexToInt(char c);
-    static std::string_view GetMapperType(std::string_view extension);
+    static std::string_view GetMimeType(std::string_view extension);
 };
 
 class LoggingRequestHandler {
