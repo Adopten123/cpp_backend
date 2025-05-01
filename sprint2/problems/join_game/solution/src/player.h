@@ -20,7 +20,12 @@ using Token = util::Tagged<std::string, detail::TokenTag>;
 
 class PlayerToken {
 public:
-    Token GetToken();
+    Token GetToken() {
+        std::stringstream ss;
+        ss << std::hex << std::setw(16) << std::setfill('0') << generator1_() << std::setw(16) << generator2_();
+        return Token(ss.str());
+    }
+
 private:
     std::random_device random_device_;
     std::mt19937_64 generator1_{ [this] {
