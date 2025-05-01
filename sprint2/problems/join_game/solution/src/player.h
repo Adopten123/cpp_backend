@@ -37,9 +37,10 @@ class Player {
 public:
     explicit Player(const Token& token, model::GameSession* session, model::Dog* dog)
         : id_(GetNextId())
-        , token_(token)
         , session_(session)
-        , dog_(dog) {}
+        , dog_(dog)
+        , token_(std::move(token)) {
+    }
 
     Token GetToken() const { return token_; }
     int GetId() const noexcept { return id_; }

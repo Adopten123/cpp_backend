@@ -1,16 +1,15 @@
 #include "player.h"
-#include "model.h"
 
 namespace app {
 
 Player& Players::AddPlayer(model::Dog&& dog, model::GameSession* session) {
-    auto* dog = session->AddDog(std::move(dog));
+    auto* tmp_dog = session->AddDog(std::move(dog));
     auto token = token_.GetToken();
 
     while (tokens_by_players_.contains(token))
         token = token_.GetToken();
 
-    Player player(token, session, dog);
+    Player player(token, session, tmp_dog);
     players_.emplace_back(std::move(player));
     tokens_by_players_.emplace(token,  players_.size() - 1);
     return players_.back();

@@ -223,7 +223,7 @@ public:
     	: map_{map} {}
 	~GameSession() = default;
 
-    std::vector<const Dog*> GetDogs() const noexcept;
+    std::vector<const Dog*> GetDogs() const;
     Dog* AddDog(Dog&& dog);
 private:
     GameSession(const GameSession&) = delete;

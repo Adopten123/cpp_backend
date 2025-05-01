@@ -91,7 +91,7 @@ public:
     HttpResponseFactory() = delete;
 
     template<typename Send>
-    ResponseData HandleBadRequest(Send&& send, unsigned http_version, bool is_head_request = false) const {
+    static ResponseData HandleBadRequest(Send&& send, unsigned http_version, bool is_head_request = false) {
         HandleResponse(
             http::status::bad_request,
             RequestHttpBody::BAD_REQUEST,
@@ -108,7 +108,8 @@ public:
     }
 
     template<typename Send>
-	ResponseData HandleStaticFilesOr404(const fs::path root_path, std::string_view path, Send&& send, unsigned http_version, bool is_head_request = false) const {
+	static ResponseData HandleStaticFilesOr404(const fs::path root_path, std::string_view path, Send&& send,
+                                               unsigned http_version, bool is_head_request = false) {
         http::response<http::file_body> res;
         res.version(http_version);
         res.result(http::status::ok);
@@ -127,7 +128,7 @@ public:
         http::file_body::value_type file;
 
         if (sys::error_code ec; file.open(full_path.data(), beast::file_mode::read, ec), ec) {
-            SendResponse(http::status::not_found, RequestHttpBody::FILE_NOT_FOUND, http_version, std::move(send), MimeType::TEXT_PLAIN, is_head_request);
+            HandleResponse(http::status::not_found, RequestHttpBody::FILE_NOT_FOUND, http_version, std::move(send), MimeType::TEXT_PLAIN, is_head_request);
             return { http::status::not_found , MimeType::TEXT_PLAIN };
         }
 
@@ -140,7 +141,8 @@ public:
 	}
 
     template<typename Send>
-    void HandleResponse(http::status status, std::string_view body, unsigned http_version, Send&& send, std::string_view type, bool is_head_request = false) const {
+    static void HandleResponse(http::status status, std::string_view body, unsigned http_version,
+                                   Send&& send, std::string_view type, bool is_head_request = false) {
         http::response<http::string_body> response(status, http_version);
         response.insert(http::field::content_type, type);
 
@@ -151,7 +153,8 @@ public:
     }
 
     template<typename Send>
-    static void HandleAPIResponse(http::status status, std::string_view body, unsigned http_version, Send&& send, bool is_head_request = false) {
+    static void HandleAPIResponse(http::status status, std::string_view body,
+                                  unsigned http_version, Send&& send, bool is_head_request = false) {
         http::response<http::string_body> response(status, http_version);
         response.insert(http::field::content_type, MimeType::APP_JSON);
         response.insert(http::field::cache_control, "no-cache");
@@ -410,8 +413,8 @@ private:
 
 class LoggingRequestHandler {
 public:
-    LoggingRequestHandler(RequestHandler& handler)
-        : decorated_(handler) {
+    LoggingRequestHandler(std::shared_ptr<RequestHandler> handler)
+      : decorated_(handler) {
     }
 
     template <typename Body, typename Allocator>
@@ -423,7 +426,7 @@ public:
         BOOST_LOG_TRIVIAL(info) << logging::add_value(data, request_data) << "request received";
     }
 
-    static void LogResponse(const ResponseData& r, double response_time, const boost::beast::net::ip::address& address);
+    static void LogResponse(const ResponseData& r, boost::chrono::system_clock::time_point start_time, const boost::beast::net::ip::address&& address);
 
     static void Formatter(logging::record_view const& rec, logging::formatting_ostream& strm) {
         auto ts = *logging::extract<boost::posix_time::ptime>("TimeStamp", rec);
@@ -444,7 +447,7 @@ public:
     }
 
 private:
-    RequestHandler& decorated_;
+    std::shared_ptr<RequestHandler> decorated_;
 };
 
 }  // namespace http_handler

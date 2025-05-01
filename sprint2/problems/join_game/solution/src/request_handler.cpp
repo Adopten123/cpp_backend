@@ -73,38 +73,23 @@ json::array SerializeBuildings(const model::Map* map) {
 //----------------------------------------------------------------------------------------------------------------------
 
 RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target) const {
-    auto parts = SplitRequest(target.substr(1, target.length() - 1));
-    if (parts.size() >= 3
-        and parts[1] == RestApiLiterals::VERSION_1
-        and parts[2] == RestApiLiterals::MAPS
-        )
-    {
-            if (parts.size() == 3)
-                return RequestHandler::RequestType::API_MAPS;
-            else if (parts.size() == 4)
-                return RequestHandler::RequestType::API_MAP;
-            else
-                return RequestHandler::RequestType::BAD_REQUEST;
+    if (target.starts_with(RestApiLiterals::API_V1)) {
+        return RequestHandler::RequestType::API;
     }
-
-    if (parts[0] == RestApiLiterals::API)
+    if (target.starts_with("/api")) {
         return RequestHandler::RequestType::BAD_REQUEST;
-
-    try {
-        auto temp_path = root_path_;
-        temp_path += target;
-        auto path = fs::weakly_canonical(temp_path);
-        auto canonical_root = fs::weakly_canonical(root_path_);
-        for (auto root_it = canonical_root.begin(), path_it = path.begin(); root_it != canonical_root.end(); ++root_it, ++path_it) {
-            if (path_it == path.end() || *path_it != *root_it) {
-                return RequestHandler::RequestType::BAD_REQUEST;
-            }
+    }
+    auto request = SplitRequest(target.substr(1, target.length() - 1));
+    auto temp_path = root_path_;
+    temp_path += target;
+    auto path = fs::weakly_canonical(temp_path);
+    auto canonical_root = fs::weakly_canonical(root_path_);
+    for (auto b = canonical_root.begin(), p = path.begin(); b != canonical_root.end(); ++b, ++p) {
+        if (p == path.end() || *p != *b) {
+            return RequestHandler::RequestType::BAD_REQUEST;
         }
-        return RequestHandler::RequestType::FILE;
     }
-    catch (...) {
-        return RequestType::BAD_REQUEST;
-    }
+    return RequestHandler::RequestType::FILE;
 }
 
 std::string RequestHandler::URLDecode(std::string_view url) const {
@@ -171,13 +156,16 @@ std::string_view HttpResponseFactory::GetMimeType(std::string_view extension) {
 //----------------------------------------------------------------------------------------------------------------------
 //--------------------------------------------LoggingRequestHandler-----------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
-void LoggingRequestHandler::LogResponse(const ResponseData& r,
-                                        double response_time,
-                                        const boost::beast::net::ip::address& address)
+    void LoggingRequestHandler::LogResponse(
+                                const ResponseData& r,
+                                boost::chrono::system_clock::time_point start_time,
+                                const boost::beast::net::ip::address&& address
+    )
 {
+    boost::chrono::duration<double> response_time = boost::chrono::system_clock::now() - start_time;
     json::object response_data;
     response_data["ip"] = address.to_string();
-    response_data["response_time"] = (int)(response_time * 1000);
+    response_data["response_time"] = (int)(response_time.count() * 1000);
     response_data["code"] = (int)r.code;
     response_data["content_type"] = r.content_type.data();
     BOOST_LOG_TRIVIAL(info) << logging::add_value(data, response_data) << "response sent";

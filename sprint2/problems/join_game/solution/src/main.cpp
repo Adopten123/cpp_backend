@@ -15,7 +15,6 @@ namespace sys = boost::system;
 namespace logging = boost::log;
 
 BOOST_LOG_ATTRIBUTE_KEYWORD(additional_data, "AdditionalData", boost::json::value);
-//BOOST_LOG_ATTRIBUTE_KEYWORD(timestamp, "TimeStamp", boost::posix_time::ptime)
 
 namespace {
 
@@ -70,7 +69,7 @@ int main(int argc, const char* argv[]) {
             });
 
         // 4. Создаём обработчик HTTP-запросов и связываем его с моделью игры
-        http_handler::RequestHandler handler{game, argv[2], ioc};
+        auto handler = std::make_shared<http_handler::RequestHandler>(game, argv[2], ioc);
         http_handler::LoggingRequestHandler log_handler{handler};
 
         // 5. Запустить обработчик HTTP-запросов, делегируя их обработчику запросов
