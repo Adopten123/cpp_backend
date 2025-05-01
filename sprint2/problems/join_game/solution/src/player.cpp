@@ -10,7 +10,7 @@ Player& Players::AddPlayer(model::Dog&& dog, model::GameSession* session) {
         token = token_.GetToken();
 
     Player player(token, session, tmp_dog);
-    players_.emplace_back(std::move(player));
+    players_.push_back(std::move(player));
     tokens_by_players_.emplace(token,  players_.size() - 1);
     return players_.back();
 }
