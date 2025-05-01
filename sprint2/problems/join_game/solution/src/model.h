@@ -195,41 +195,38 @@ private:
 
 class Dog {
 public:
-    explicit Dog(std::string&& name)
-    	: id_(GetNextId())
-    	, name_(std::move(name)) {
+    explicit Dog(std::string&& name) : id_(GetNextId()), name_(std::move(name)) {
     }
 
-    int GetId() const noexcept {
-    	return id_;
+    int GetId() const {
+        return id_;
     }
 
-    const std::string& GetName() const noexcept {
+    const std::string& GetName() const {
         return name_;
     }
-private:
-    static int id_counter_;
-    static int GetNextId() noexcept {
-    	return id_counter_++;
-    }
 
+private:
     const int id_;
     std::string name_;
+    static int start_id_;
+
+    static int GetNextId() {
+        return start_id_++;
+    }
 };
 
 class GameSession {
 public:
-	explicit GameSession(Map* map)
-    	: map_{map} {}
-	~GameSession() = default;
+    explicit GameSession(Map* map) : map_(map) {
+    }
 
     std::vector<const Dog*> GetDogs() const;
-    Dog* AddDog(Dog&& dog);
-private:
-    GameSession(const GameSession&) = delete;
-  	GameSession& operator=(const GameSession&) = delete;
 
-	std::vector<Dog> dogs_;
+    Dog* AddDog(Dog&& dog);
+
+private:
+    std::vector<Dog> dogs_;
     Map* map_;
 };
 
@@ -244,14 +241,16 @@ public:
     }
 
     const Map* FindMap(const Map::Id& id) const noexcept {
-        if (auto it = map_id_to_index_.find(id); it != map_id_to_index_.end())
+        if (auto it = map_id_to_index_.find(id); it != map_id_to_index_.end()) {
             return &maps_.at(it->second);
+        }
         return nullptr;
     }
 
     GameSession* FindSession(const Map::Id& id) {
-        if (auto it = map_id_to_index_.find(id); it != map_id_to_index_.end())
+        if (auto it = map_id_to_index_.find(id); it != map_id_to_index_.end()) {
             return &sessions_.at(it->second);
+        }
         return nullptr;
     }
 
@@ -265,3 +264,88 @@ private:
 };
 
 }  // namespace model
+
+namespace detail {
+    struct TokenTag {};
+}  // namespace detail
+
+namespace app {
+
+using Token = util::Tagged<std::string, detail::TokenTag>;
+
+class TokensGen {
+public:
+    Token GetToken();
+
+private:
+    std::random_device random_device_;
+    std::mt19937_64 generator1_{ [this] {
+        std::uniform_int_distribution<std::mt19937_64::result_type> dist;
+        return dist(random_device_);
+    }() };
+    std::mt19937_64 generator2_{ [this] {
+        std::uniform_int_distribution<std::mt19937_64::result_type> dist;
+        return dist(random_device_);
+    }() };
+    // ×òîáû ñãåíåðèðîâàòü òîêåí, ïîëó÷èòå èç generator1_ è generator2_
+    // äâà 64-ðàçðÿäíûõ ÷èñëà è, ïåðåâåäÿ èõ â hex-ñòðîêè, ñêëåéòå â îäíó.
+    // Âû ìîæåòå ïîýêñïåðèìåíòèðîâàòü ñ àëãîðèòìîì ãåíåðèðîâàíèÿ òîêåíîâ,
+    // ÷òîáû ñäåëàòü èõ ïîäáîð åù¸ áîëåå çàòðóäíèòåëüíûì
+};
+
+class Player {
+public:
+    //explicit Player(int id, Token&& token, model::GameSession* session, model::Dog* dog);
+    explicit Player(Token token, model::GameSession* session, model::Dog* dog);
+    //Player() = delete;
+
+    Token GetToken() const {
+        return token_;
+    }
+
+    int GetId() const noexcept {
+        return id_;
+    }
+
+    const model::GameSession* GetSession() const noexcept {
+        return session_;
+    }
+
+    const model::Dog* GetDog() const noexcept {
+        return dog_;
+    }
+
+private:
+    int id_;
+    model::GameSession* session_;
+    model::Dog* dog_;
+    Token token_;
+    static int start_id_;
+
+    static int GetNextId() {
+        return start_id_++;
+    }
+};
+
+class Players {
+public:
+    //Players();
+
+    //Äîáàâëÿåì ñîáàêó â ñåññèþ, çàòåì ñîçäà¸ì èãðîêà
+    Player& AddPlayer(model::Dog&& dog, model::GameSession* session);
+
+    //Player* FindByDogIdAndMapId(int dog_id, int map_id) const;
+
+    const Player* FindByToken(const Token& token) const;
+
+private:
+    using TokenHasher = util::TaggedHasher<Token>;
+    using TokensToPlayers = std::unordered_map<Token, size_t, TokenHasher>;
+
+    std::vector<Player> players_;
+    //std::unordered_map<Token, Player*, util::TaggedHasher<detail::TokenTag>> tokens_to_players_;
+    TokensToPlayers tokens_to_players_;
+    TokensGen token_gen_;
+};
+
+}  // namespace app
