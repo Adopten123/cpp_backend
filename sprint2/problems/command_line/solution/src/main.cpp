@@ -7,7 +7,10 @@
 #include <thread>
 
 #include "json_loader.h"
+
+#include "api_handler.h"
 #include "request_handler.h"
+#include "logging_handler.h"
 
 using namespace std::literals;
 namespace net = boost::asio;

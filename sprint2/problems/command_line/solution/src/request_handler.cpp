@@ -75,23 +75,6 @@ RequestHandler::RequestHandler(app::Application& app, const char* path_to_static
     api_handler_(std::make_shared<APIRequestHandler>(app, ioc, no_auto_tick)){
 }
 
-APIRequestHandler::APIRequestHandler(app::Application& app, net::io_context& ioc, bool no_auto_tick)
-    : app_{ app },
-    strand_(net::make_strand(ioc)),
-    auto_tick_(!no_auto_tick){
-}
-
-json::array APIRequestHandler::ProcessMapsRequestBody() const {
-    auto maps_body = json::array();
-    for (const auto& map : app_.GetMaps()) {
-        json::object body;
-        body[std::string(model::ModelLiterals::ID)] = *map.GetId();
-        body[std::string(model::ModelLiterals::NAME)] = map.GetName();
-        maps_body.emplace_back(std::move(body));
-    }
-    return maps_body;
-}
-
 RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target) const {
     if (target.starts_with(RestApiLiterals::API_V1)) {
         return RequestHandler::RequestType::API;
@@ -171,28 +154,6 @@ std::string RequestHandler::DecodeURL(std::string_view url) const {
         }
     }
     return std::string(text.data(), text.size());
-}
-
-void LoggingRequestHandler::LogResponse(const ResponseData& r, boost::chrono::system_clock::time_point start_time, const boost::beast::net::ip::address&& address) {
-    boost::chrono::duration<double> response_time = boost::chrono::system_clock::now() - start_time;
-    json::object response_data;
-    response_data["ip"] = address.to_string();
-    response_data["response_time"] = (int)(response_time.count() * 1000);
-    response_data["code"] = (int)r.code;
-    response_data["content_type"] = r.content_type.data();
-    BOOST_LOG_TRIVIAL(info) << logging::add_value(data, response_data) << "response sent";
-}
-
-bool APIRequestHandler::ParseBearer(const std::string_view auth_header, std::string& token_to_write) const {
-    if (!auth_header.starts_with("Bearer ")) {
-        return false;
-    }
-    std::string_view str = auth_header.substr(7);
-    if (str.size() != 32) {
-        return false;
-    }
-    token_to_write = str;
-    return true;
 }
 
 }  // namespace http_handler
