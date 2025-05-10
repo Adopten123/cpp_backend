@@ -1,30 +1,7 @@
 #pragma once
-
 #include "request_handler.h"
 
-#include <boost/asio/io_context.hpp>
-#include <boost/json.hpp>
-#include <boost/log/trivial.hpp>
-#include <boost/log/expressions.hpp>
-#include <boost/log/utility/manipulators/add_value.hpp>
-#include <boost/log/utility/setup.hpp>
-#include <boost/log/utility/setup/console.hpp>
-#include <boost/date_time.hpp>
-#include <boost/chrono.hpp>
-#include <filesystem>
-#include <functional>
-#include <memory>
-
 namespace http_handler {
-
-using namespace std::literals;
-namespace beast = boost::beast;
-namespace json = boost::json;
-namespace http = beast::http;
-namespace fs = std::filesystem;
-namespace sys = boost::system;
-namespace logging = boost::log;
-namespace net = boost::asio;
 
 class LoggingRequestHandler {
     template <typename Body, typename Allocator>
@@ -62,4 +39,4 @@ private:
     std::shared_ptr<RequestHandler> decorated_;
 };
 
-}
+}  // namespace http_handler

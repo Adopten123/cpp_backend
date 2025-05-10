@@ -1,30 +1,21 @@
 #pragma once
-
 #include "request_handler.h"
-
-#include <boost/asio/io_context.hpp>
-#include <boost/json.hpp>
-#include <boost/log/trivial.hpp>
-#include <boost/log/expressions.hpp>
-#include <boost/log/utility/manipulators/add_value.hpp>
-#include <boost/log/utility/setup.hpp>
-#include <boost/log/utility/setup/console.hpp>
-#include <boost/date_time.hpp>
-#include <boost/chrono.hpp>
-#include <filesystem>
-#include <functional>
-#include <memory>
 
 namespace http_handler {
 
-using namespace std::literals;
-namespace beast = boost::beast;
-namespace json = boost::json;
-namespace http = beast::http;
-namespace fs = std::filesystem;
-namespace sys = boost::system;
-namespace logging = boost::log;
-namespace net = boost::asio;
+struct RestApiLiterals {
+    RestApiLiterals() = delete;
+    constexpr static std::string_view API_V1 = "/api/v1/"sv;
+    constexpr static std::string_view MAPS = "maps"sv;
+    constexpr static std::string_view MAP = "map"sv;
+    constexpr static std::string_view GAME = "game"sv;
+    constexpr static std::string_view JOIN = "join"sv;
+    constexpr static std::string_view PLAYERS = "players"sv;
+    constexpr static std::string_view STATE = "state"sv;
+    constexpr static std::string_view PLAYER = "player"sv;
+    constexpr static std::string_view ACTION = "action"sv;
+    constexpr static std::string_view TICK = "tick"sv;
+};
 
 class APIRequestHandler : public std::enable_shared_from_this<APIRequestHandler> {
 public:
@@ -36,98 +27,7 @@ public:
     APIRequestHandler& operator=(const APIRequestHandler&) = delete;
 
     template <typename Body, typename Allocator, typename Send>
-    ResponseData ProcessRequest(std::string_view target, Send&& send, const http::request<Body, http::basic_fields<Allocator>>&& req) {
-        auto unslashed = target.substr(1, target.length() - 1);
-        auto splitted = SplitRequest(unslashed);
-        std::string_view method = std::string_view(req.method_string().data());
-        unsigned http_version = req.version();
-        if (splitted.size() < 3) {
-            return Sender::SendBadRequest(std::move(send));
-        }
-        if (splitted[2] == RestApiLiterals::MAPS) {
-            if (splitted.size() == 4) {
-                return MapRequest(std::string(splitted[3].data(), splitted[3].size()), std::move(send));
-            }
-            if (splitted.size() == 3) {
-                Sender::SendAPIResponse(http::status::ok, json::serialize(ProcessMapsRequestBody()), std::move(send));
-                return { http::status::ok , ContentType::APP_JSON };
-            }
-        }
-        if (splitted[2] == RestApiLiterals::MAP) {
-            if (splitted.size() != 4) {
-                return Sender::SendBadRequest(std::move(send));
-            }
-            return MapRequest(std::string(splitted[3].data(), splitted[3].size()), std::move(send));
-        }
-        if (splitted[2] == RestApiLiterals::GAME) {
-            if (splitted.size() < 4) {
-                return Sender::SendBadRequest(std::move(send));
-            }
-            if (splitted[3] == RestApiLiterals::JOIN) {
-                if (method != "POST") {
-                    return Sender::SendMethodNotAllowed(std::move(send), "POST");
-                }
-                return JoinRequest(req.body(), std::move(send));
-            }
-            if (splitted[3] == RestApiLiterals::PLAYERS) {
-                if (method != "GET" && method != "HEAD") {
-                    return Sender::SendMethodNotAllowed(std::move(send), "GET, HEAD");
-                }
-                std::string token = "";
-                auto token_valid = ParseBearer(std::move(req.base()[http::field::authorization]), token);
-                if (!token_valid) {
-                    Sender::SendAPIResponse(http::status::unauthorized, HttpBodies::INVALID_TOKEN, std::move(send));
-                    return { http::status::unauthorized, ContentType::APP_JSON };
-                }
-                return PlayersRequest(std::move(token), std::move(send));
-            }
-            if (splitted[3] == RestApiLiterals::STATE) {
-                if (method != "GET" && method != "HEAD") {
-                    return Sender::SendMethodNotAllowed(std::move(send), "GET, HEAD");
-                }
-                std::string token = "";
-                auto token_valid = ParseBearer(std::move(req.base()[http::field::authorization]), token);
-                if (!token_valid) {
-                    Sender::SendAPIResponse(http::status::unauthorized, HttpBodies::INVALID_TOKEN, std::move(send));
-                    return { http::status::unauthorized, ContentType::APP_JSON };
-                }
-                return StateRequest(std::move(token), std::move(send));
-            }
-            if (splitted[3] == RestApiLiterals::PLAYER) {
-                if (splitted.size() == 4) {
-                    Sender::SendAPIResponse(http::status::bad_request, HttpBodies::BAD_REQUEST, std::move(send));
-                    return { http::status::bad_request, ContentType::APP_JSON };
-                }
-                if (splitted[4] == RestApiLiterals::ACTION) {
-                    if (method != "POST") {
-                        return Sender::SendMethodNotAllowed(std::move(send), "POST");
-                    }
-                    std::string token = "";
-                    auto token_valid = ParseBearer(std::move(req.base()[http::field::authorization]), token);
-                    if (!token_valid) {
-                        Sender::SendAPIResponse(http::status::unauthorized, HttpBodies::INVALID_TOKEN, std::move(send));
-                        return { http::status::unauthorized, ContentType::APP_JSON };
-                    }
-                    std::string_view content_type = req.base()[http::field::content_type];
-                    if (content_type != ContentType::APP_JSON) {
-                        Sender::SendAPIResponse(http::status::bad_request, HttpBodies::INVALID_CONTENT_TYPE, std::move(send));
-                        return { http::status::bad_request, ContentType::APP_JSON };
-                    }
-                    return ActionRequest(std::move(token), req.body(), std::move(send));
-                }
-            }
-            if (splitted[3] == RestApiLiterals::TICK) {
-                if (auto_tick_) {
-                    return Sender::SendBadRequest(std::move(send));
-                }
-                if (method != "POST") {
-                    return Sender::SendMethodNotAllowed(std::move(send), "POST");
-                }
-                return TickRequest(req.body(), std::move(send));
-            }
-        }
-        return Sender::SendBadRequest(std::move(send));
-    }
+    ResponseData ProcessRequest(std::string_view target, Send&& send, const http::request<Body, http::basic_fields<Allocator>>&& req);
 
     Strand& GetStrand() {
         return strand_;
@@ -147,8 +47,7 @@ private:
         if (map) {
             Sender::SendAPIResponse(http::status::ok, json::serialize(MapToJSON(map)), std::move(send));
             return { http::status::ok , ContentType::APP_JSON };
-        }
-        else {
+        } else {
             Sender::SendAPIResponse(http::status::not_found, HttpBodies::MAP_NOT_FOUND, std::move(send));
             return { http::status::not_found , ContentType::APP_JSON };
         }
@@ -159,8 +58,7 @@ private:
         json::object json_body;
         try {
             json_body = json::parse(body.data()).as_object();
-        }
-        catch (std::exception& ex) {
+        } catch (std::exception& ex) {
             Sender::SendAPIResponse(http::status::bad_request, HttpBodies::JOIN_GAME_PARSE_ERROR, std::move(send));
             return { http::status::bad_request, ContentType::APP_JSON };
         }
@@ -256,8 +154,7 @@ private:
         json::object json_body;
         try {
             json_body = json::parse(body.data()).as_object();
-        }
-        catch (std::exception& ex) {
+        } catch (std::exception& ex) {
             Sender::SendAPIResponse(http::status::bad_request, HttpBodies::ACTION_PARSE_ERROR, std::move(send));
             return { http::status::bad_request, ContentType::APP_JSON };
         }
@@ -301,8 +198,7 @@ private:
         json::object json_body;
         try {
             json_body = json::parse(body.data()).as_object();
-        }
-        catch (std::exception& ex) {
+        } catch (std::exception& ex) {
             Sender::SendAPIResponse(http::status::bad_request, HttpBodies::TICK_PARSE_ERROR, std::move(send));
             return { http::status::bad_request, ContentType::APP_JSON };
         }
@@ -324,4 +220,4 @@ private:
     bool ParseBearer(const std::string_view auth_header, std::string& token_to_write) const;
 };
 
-}
+}  // namespace http_handler

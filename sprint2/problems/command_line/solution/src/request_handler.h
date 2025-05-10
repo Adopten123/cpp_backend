@@ -2,8 +2,6 @@
 #include "http_server.h"
 #include "model.h"
 
-#include "api_handler.h"
-
 #include <boost/asio/io_context.hpp>
 #include <boost/json.hpp>
 #include <boost/log/trivial.hpp>
@@ -73,20 +71,6 @@ struct FileExtensions {
     constexpr static std::string_view MP3 = "mp3"sv;
 };
 
-struct RestApiLiterals {
-    RestApiLiterals() = delete;
-    constexpr static std::string_view API_V1 = "/api/v1/"sv;
-    constexpr static std::string_view MAPS = "maps"sv;
-    constexpr static std::string_view MAP = "map"sv;
-    constexpr static std::string_view GAME = "game"sv;
-    constexpr static std::string_view JOIN = "join"sv;
-    constexpr static std::string_view PLAYERS = "players"sv;
-    constexpr static std::string_view STATE = "state"sv;
-    constexpr static std::string_view PLAYER = "player"sv;
-    constexpr static std::string_view ACTION = "action"sv;
-    constexpr static std::string_view TICK = "tick"sv;
-};
-
 struct HttpBodies {
     HttpBodies() = delete;
     constexpr static std::string_view BAD_REQUEST = R"({ "code": "badRequest", "message": "Bad request" })"sv;
@@ -101,13 +85,6 @@ struct HttpBodies {
     constexpr static std::string_view TOKEN_UNKNOWN = R"({ "code": "unknownToken", "message": "Player token has not been found" })"sv;
     constexpr static std::string_view INVALID_CONTENT_TYPE = R"({"code": "invalidArgument", "message": "Invalid content type"} )"sv;
 };
-
-std::vector<std::string_view> SplitRequest(std::string_view body);
-
-json::object MapToJSON(const model::Map* map);
-json::array RoadsToJson(const model::Map* map);
-json::array OfficesToJson(const model::Map* map);
-json::array BuildingsToJson(const model::Map* map);
 
 struct ResponseData {
     http::status code;
@@ -211,42 +188,16 @@ public:
     RequestHandler(const RequestHandler&) = delete;
     RequestHandler& operator=(const RequestHandler&) = delete;
 
-    auto& GetStrand() {
-        return api_handler_->GetStrand();
-    }
+    auto& GetStrand();
 
     template <typename Body, typename Allocator, typename Send>
-    void operator()(http::request<Body, http::basic_fields<Allocator>>&& req, Send&& send, std::function<void(ResponseData&&)> handle) {
-        auto string_target = DecodeURL(req.target());
-        std::string_view target(string_target);
-        switch(CheckRequest(target)) {
-        case RequestType::API:
-        {
-            net::dispatch(api_handler_->GetStrand(), [self = shared_from_this(), string_target_ = std::move(string_target)
-                                                     , req_ = std::move(req), send_ = std::move(send), api_handler__ = api_handler_->shared_from_this()
-                                                     , handle_ = std::move(handle)]() {
-                    handle_(api_handler__->ProcessRequest(std::string_view(string_target_), std::move(send_), std::move(req_)));
-                });
-            return;
-            break;
-        }
-        case RequestType::FILE:
-            return handle(Sender::SendFileResponseOr404(root_path_, target, std::move(send)));
-            break;
-        case RequestType::BAD_REQUEST:
-            return handle(Sender::SendBadRequest(std::move(send)));
-            break;
-        default:
-            return handle(Sender::SendBadRequest(std::move(send)));
-            break;
-        }
-    }
+    void operator()(http::request<Body, http::basic_fields<Allocator>>&& req, Send&& send, std::function<void(ResponseData&&)> handle);
 
 private:
-    friend APIRequestHandler;
+    friend class APIRequestHandler;
 
     const fs::path root_path_;
-    std::shared_ptr<APIRequestHandler> api_handler_;
+    std::shared_ptr<class APIRequestHandler> api_handler_;
 
     enum RequestType {
         API,

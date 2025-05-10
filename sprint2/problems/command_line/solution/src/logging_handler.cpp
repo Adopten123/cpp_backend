@@ -12,4 +12,4 @@ void LoggingRequestHandler::LogResponse(const ResponseData& r, boost::chrono::sy
     BOOST_LOG_TRIVIAL(info) << logging::add_value(data, response_data) << "response sent";
 }
 
-}
+}  // namespace http_handler
