@@ -1,5 +1,4 @@
 #include "request_handler.h"
-#include "api_handler.h"
 
 #include <ranges>
 
@@ -76,8 +75,21 @@ RequestHandler::RequestHandler(app::Application& app, const char* path_to_static
     api_handler_(std::make_shared<APIRequestHandler>(app, ioc, no_auto_tick)){
 }
 
-auto& RequestHandler::GetStrand() {
-    return api_handler_->GetStrand();
+APIRequestHandler::APIRequestHandler(app::Application& app, net::io_context& ioc, bool no_auto_tick)
+    : app_{ app },
+    strand_(net::make_strand(ioc)),
+    auto_tick_(!no_auto_tick){
+}
+
+json::array APIRequestHandler::ProcessMapsRequestBody() const {
+    auto maps_body = json::array();
+    for (const auto& map : app_.GetMaps()) {
+        json::object body;
+        body[std::string(model::ModelLiterals::ID)] = *map.GetId();
+        body[std::string(model::ModelLiterals::NAME)] = map.GetName();
+        maps_body.emplace_back(std::move(body));
+    }
+    return maps_body;
 }
 
 RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target) const {
@@ -161,27 +173,16 @@ std::string RequestHandler::DecodeURL(std::string_view url) const {
     return std::string(text.data(), text.size());
 }
 
-template <typename Body, typename Allocator, typename Send>
-void RequestHandler::operator()(http::request<Body, http::basic_fields<Allocator>>&& req, Send&& send, std::function<void(ResponseData&&)> handle) {
-    auto string_target = DecodeURL(req.target());
-    std::string_view target(string_target);
-    switch(CheckRequest(target)) {
-    case RequestType::API:
-    {
-        net::dispatch(api_handler_->GetStrand(), [self = shared_from_this(), string_target_ = std::move(string_target)
-                                                 , req_ = std::move(req), send_ = std::move(send), api_handler__ = api_handler_->shared_from_this()
-                                                 , handle_ = std::move(handle)]() {
-                handle_(api_handler__->ProcessRequest(std::string_view(string_target_), std::move(send_), std::move(req_)));
-            });
-        return;
+bool APIRequestHandler::ParseBearer(const std::string_view auth_header, std::string& token_to_write) const {
+    if (!auth_header.starts_with("Bearer ")) {
+        return false;
     }
-    case RequestType::FILE:
-        return handle(Sender::SendFileResponseOr404(root_path_, target, std::move(send)));
-    case RequestType::BAD_REQUEST:
-        return handle(Sender::SendBadRequest(std::move(send)));
-    default:
-        return handle(Sender::SendBadRequest(std::move(send)));
+    std::string_view str = auth_header.substr(7);
+    if (str.size() != 32) {
+        return false;
     }
+    token_to_write = str;
+    return true;
 }
 
 }  // namespace http_handler

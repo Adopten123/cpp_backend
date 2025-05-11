@@ -1,4 +1,5 @@
 #pragma once
+
 #include "request_handler.h"
 
 namespace http_handler {
@@ -39,4 +40,4 @@ private:
     std::shared_ptr<RequestHandler> decorated_;
 };
 
-}  // namespace http_handler
+}
