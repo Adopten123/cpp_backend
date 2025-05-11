@@ -32,6 +32,7 @@ add_executable(game_server
         src/logging_handler.cpp
         src/api_handler.h
         src/api_handler.cpp
+        src/handler_models.h
 )
 target_include_directories(game_server PRIVATE CONAN_PKG::boost)
 target_link_libraries(game_server PRIVATE CONAN_PKG::boost)
