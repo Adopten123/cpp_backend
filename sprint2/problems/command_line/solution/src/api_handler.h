@@ -1,22 +1,6 @@
 #pragma once
 
-#include "http_server.h"
-#include "model.h"
-
-#include "handler_models.h"
-
-#include <boost/asio/io_context.hpp>
-#include <boost/json.hpp>
-#include <boost/log/trivial.hpp>
-#include <boost/log/expressions.hpp>
-#include <boost/log/utility/manipulators/add_value.hpp>
-#include <boost/log/utility/setup.hpp>
-#include <boost/log/utility/setup/console.hpp>
-#include <boost/date_time.hpp>
-#include <boost/chrono.hpp>
-#include <filesystem>
-#include <functional>
-#include <memory>
+#include "handler_utils.h"
 
 namespace http_handler {
 
@@ -28,18 +12,6 @@ namespace fs = std::filesystem;
 namespace sys = boost::system;
 namespace logging = boost::log;
 namespace net = boost::asio;
-
-std::vector<std::string_view> SplitRequest(std::string_view body);
-
-json::object MapToJSON(const model::Map* map);
-json::array RoadsToJson(const model::Map* map);
-json::array OfficesToJson(const model::Map* map);
-json::array BuildingsToJson(const model::Map* map);
-
-struct ResponseData {
-    http::status code;
-    std::string_view content_type;
-};
 
 class ExtensionToConetntTypeMapper {
 public:
@@ -57,8 +29,8 @@ public:
 
     template<typename Send>
     static ResponseData SendBadRequest(Send&& send, bool is_head_method = false) {
-        SendResponse(http::status::bad_request, HttpBodies::BAD_REQUEST, std::move(send), ContentType::APP_JSON, is_head_method);
-        return { http::status::bad_request, ContentType::APP_JSON };
+        SendResponse(http::status::bad_request, HttpBodies::BAD_REQUEST, std::move(send), MimeType::APP_JSON, is_head_method);
+        return { http::status::bad_request, MimeType::APP_JSON };
     }
 
     template<typename Send>
@@ -68,21 +40,21 @@ public:
         res.result(http::status::ok);
         std::string full_path = root_path.string() + path.data();
         std::size_t ext_start = path.find_last_of('.', path.size());
-        std::string_view type = ContentType::TEXT_HTML;
+        std::string_view type = MimeType::TEXT_HTML;
         if (ext_start != path.npos) {
-            type = mapper_(path.substr(ext_start + 1, path.size() - ext_start + 1));
+            type = utils::GetMimeType(path.substr(ext_start + 1, path.size() - ext_start + 1));
             res.insert(http::field::content_type, type);
         }
         else {
             full_path = root_path.string() + "/index.html";
-            res.insert(http::field::content_type, ContentType::TEXT_HTML);
+            res.insert(http::field::content_type, MimeType::TEXT_HTML);
         }
 
         http::file_body::value_type file;
 
         if (sys::error_code ec; file.open(full_path.data(), beast::file_mode::read, ec), ec) {
-            SendResponse(http::status::not_found, HttpBodies::FILE_NOT_FOUND, std::move(send), ContentType::TEXT_PLAIN, is_head_method);
-            return { http::status::not_found , ContentType::TEXT_PLAIN };
+            SendResponse(http::status::not_found, HttpBodies::FILE_NOT_FOUND, std::move(send), MimeType::TEXT_PLAIN, is_head_method);
+            return { http::status::not_found , MimeType::TEXT_PLAIN };
         }
 
         if (!is_head_method) {
@@ -107,7 +79,7 @@ public:
     template<typename Send>
     static void SendAPIResponse(http::status status, std::string_view body, Send&& send, bool is_head_method = false) {
         http::response<http::string_body> response(status, 11);
-        response.insert(http::field::content_type, ContentType::APP_JSON);
+        response.insert(http::field::content_type, MimeType::APP_JSON);
         response.insert(http::field::cache_control, "no-cache");
         if (!is_head_method) {
             response.body() = body;
@@ -119,12 +91,12 @@ public:
     template<typename Send>
     static ResponseData SendMethodNotAllowed(Send&& send, std::string_view allow) {
         http::response<http::string_body> response(http::status::method_not_allowed, 11);
-        response.insert(http::field::content_type, ContentType::APP_JSON);
+        response.insert(http::field::content_type, MimeType::APP_JSON);
         response.insert(http::field::cache_control, "no-cache");
         response.insert(http::field::allow, allow);
         response.body() = HttpBodies::METHOD_NOT_ALLOWED;
         send(response);
-        return { http::status::method_not_allowed, ContentType::APP_JSON };
+        return { http::status::method_not_allowed, MimeType::APP_JSON };
     }
 
 private:
@@ -144,7 +116,7 @@ public:
     template <typename Body, typename Allocator, typename Send>
     ResponseData ProcessRequest(std::string_view target, Send&& send, const http::request<Body, http::basic_fields<Allocator>>&& req) {
         auto unslashed = target.substr(1, target.length() - 1);
-        auto splitted = SplitRequest(unslashed);
+        auto splitted = utils::SplitRequest(unslashed);
         std::string_view method = std::string_view(req.method_string().data());
         unsigned http_version = req.version();
         if (splitted.size() < 3) {
@@ -156,7 +128,7 @@ public:
             }
             if (splitted.size() == 3) {
                 Sender::SendAPIResponse(http::status::ok, json::serialize(ProcessMapsRequestBody()), std::move(send));
-                return { http::status::ok , ContentType::APP_JSON };
+                return { http::status::ok , MimeType::APP_JSON };
             }
         }
         if (splitted[2] == RestApiLiterals::MAP) {
@@ -183,7 +155,7 @@ public:
                 auto token_valid = ParseBearer(std::move(req.base()[http::field::authorization]), token);
                 if (!token_valid) {
                     Sender::SendAPIResponse(http::status::unauthorized, HttpBodies::INVALID_TOKEN, std::move(send));
-                    return { http::status::unauthorized, ContentType::APP_JSON };
+                    return { http::status::unauthorized, MimeType::APP_JSON };
                 }
                 return PlayersRequest(std::move(token), std::move(send));
             }
@@ -195,14 +167,14 @@ public:
                 auto token_valid = ParseBearer(std::move(req.base()[http::field::authorization]), token);
                 if (!token_valid) {
                     Sender::SendAPIResponse(http::status::unauthorized, HttpBodies::INVALID_TOKEN, std::move(send));
-                    return { http::status::unauthorized, ContentType::APP_JSON };
+                    return { http::status::unauthorized, MimeType::APP_JSON };
                 }
                 return StateRequest(std::move(token), std::move(send));
             }
             if (splitted[3] == RestApiLiterals::PLAYER) {
                 if (splitted.size() == 4) {
                     Sender::SendAPIResponse(http::status::bad_request, HttpBodies::BAD_REQUEST, std::move(send));
-                    return { http::status::bad_request, ContentType::APP_JSON };
+                    return { http::status::bad_request, MimeType::APP_JSON };
                 }
                 if (splitted[4] == RestApiLiterals::ACTION) {
                     if (method != "POST") {
@@ -212,12 +184,12 @@ public:
                     auto token_valid = ParseBearer(std::move(req.base()[http::field::authorization]), token);
                     if (!token_valid) {
                         Sender::SendAPIResponse(http::status::unauthorized, HttpBodies::INVALID_TOKEN, std::move(send));
-                        return { http::status::unauthorized, ContentType::APP_JSON };
+                        return { http::status::unauthorized, MimeType::APP_JSON };
                     }
                     std::string_view content_type = req.base()[http::field::content_type];
-                    if (content_type != ContentType::APP_JSON) {
+                    if (content_type != MimeType::APP_JSON) {
                         Sender::SendAPIResponse(http::status::bad_request, HttpBodies::INVALID_CONTENT_TYPE, std::move(send));
-                        return { http::status::bad_request, ContentType::APP_JSON };
+                        return { http::status::bad_request, MimeType::APP_JSON };
                     }
                     return ActionRequest(std::move(token), req.body(), std::move(send));
                 }
@@ -251,12 +223,12 @@ private:
         model::Map::Id map_id(id);
         const auto* map = app_.FindMap(map_id);
         if (map) {
-            Sender::SendAPIResponse(http::status::ok, json::serialize(MapToJSON(map)), std::move(send));
-            return { http::status::ok , ContentType::APP_JSON };
+            Sender::SendAPIResponse(http::status::ok, json::serialize(utils::MapToJson(map)), std::move(send));
+            return { http::status::ok , MimeType::APP_JSON };
         }
         else {
             Sender::SendAPIResponse(http::status::not_found, HttpBodies::MAP_NOT_FOUND, std::move(send));
-            return { http::status::not_found , ContentType::APP_JSON };
+            return { http::status::not_found , MimeType::APP_JSON };
         }
     }
 
@@ -268,27 +240,27 @@ private:
         }
         catch (std::exception& ex) {
             Sender::SendAPIResponse(http::status::bad_request, HttpBodies::JOIN_GAME_PARSE_ERROR, std::move(send));
-            return { http::status::bad_request, ContentType::APP_JSON };
+            return { http::status::bad_request, MimeType::APP_JSON };
         }
         if (!json_body.contains("userName") || !json_body.at("userName").is_string()) {
             Sender::SendAPIResponse(http::status::bad_request, HttpBodies::JOIN_GAME_PARSE_ERROR, std::move(send));
-            return { http::status::bad_request, ContentType::APP_JSON };
+            return { http::status::bad_request, MimeType::APP_JSON };
         }
         auto user_name = json_body.at("userName").get_string();
         if (user_name.size() == 0) {
             Sender::SendAPIResponse(http::status::bad_request, HttpBodies::INVALID_NAME, std::move(send));
-            return { http::status::bad_request, ContentType::APP_JSON };
+            return { http::status::bad_request, MimeType::APP_JSON };
         }
         if (!json_body.contains("mapId") || !json_body.at("mapId").is_string()) {
             Sender::SendAPIResponse(http::status::bad_request, HttpBodies::JOIN_GAME_PARSE_ERROR, std::move(send));
-            return { http::status::bad_request, ContentType::APP_JSON };
+            return { http::status::bad_request, MimeType::APP_JSON };
         }
         auto map_id = json_body.at("mapId").get_string();
         auto id = model::Map::Id(map_id.data());
         auto* session = app_.FindSession(id);
         if (!session) {
             Sender::SendAPIResponse(http::status::not_found, HttpBodies::MAP_NOT_FOUND, std::move(send));
-            return { http::status::not_found, ContentType::APP_JSON };
+            return { http::status::not_found, MimeType::APP_JSON };
         }
         model::Dog dog{ std::move(std::string(user_name.data())) };
         auto& player = app_.AddPlayer(std::move(dog), session);
@@ -298,7 +270,7 @@ private:
         result["authToken"] = tokenStr;
         result["playerId"] = player.GetId();
         Sender::SendAPIResponse(http::status::ok, json::serialize(result), std::move(send));
-        return { http::status::ok, ContentType::APP_JSON };
+        return { http::status::ok, MimeType::APP_JSON };
     }
 
     template<typename Send>
@@ -306,14 +278,14 @@ private:
         auto* player = app_.FindByToken(app::Token(token));
         if (!player) {
             Sender::SendAPIResponse(http::status::unauthorized, HttpBodies::TOKEN_UNKNOWN, std::move(send));
-            return { http::status::unauthorized, ContentType::APP_JSON };
+            return { http::status::unauthorized, MimeType::APP_JSON };
         }
         json::object result;
         for (const auto* dog : app_.GetDogs(player)) {
             result[std::to_string(dog->GetId())] = json::array{ "name", dog->GetName() };
         }
         Sender::SendAPIResponse(http::status::ok, json::serialize(result), std::move(send));
-        return { http::status::ok, ContentType::APP_JSON };
+        return { http::status::ok, MimeType::APP_JSON };
     }
 
     template<typename Send>
@@ -321,7 +293,7 @@ private:
         auto* player = app_.FindByToken(app::Token(token));
         if (!player) {
             Sender::SendAPIResponse(http::status::unauthorized, HttpBodies::TOKEN_UNKNOWN, std::move(send));
-            return { http::status::unauthorized, ContentType::APP_JSON };
+            return { http::status::unauthorized, MimeType::APP_JSON };
         }
         json::object result;
         json::object players;
@@ -349,7 +321,7 @@ private:
         }
         result["players"] = players;
         Sender::SendAPIResponse(http::status::ok, json::serialize(result), std::move(send));
-        return { http::status::ok, ContentType::APP_JSON };
+        return { http::status::ok, MimeType::APP_JSON };
     }
 
     template<typename Send>
@@ -357,7 +329,7 @@ private:
         auto* player = app_.FindByToken(app::Token(token));
         if (!player) {
             Sender::SendAPIResponse(http::status::unauthorized, HttpBodies::TOKEN_UNKNOWN, std::move(send));
-            return { http::status::unauthorized, ContentType::APP_JSON };
+            return { http::status::unauthorized, MimeType::APP_JSON };
         }
         json::object json_body;
         try {
@@ -365,41 +337,41 @@ private:
         }
         catch (std::exception& ex) {
             Sender::SendAPIResponse(http::status::bad_request, HttpBodies::ACTION_PARSE_ERROR, std::move(send));
-            return { http::status::bad_request, ContentType::APP_JSON };
+            return { http::status::bad_request, MimeType::APP_JSON };
         }
         auto move = json_body.find("move");
         if (move == json_body.end() || !move->value().is_string()) {
             Sender::SendAPIResponse(http::status::bad_request, HttpBodies::ACTION_PARSE_ERROR, std::move(send));
-            return { http::status::bad_request, ContentType::APP_JSON };
+            return { http::status::bad_request, MimeType::APP_JSON };
         }
         std::string_view move_value = move->value().get_string();
         if (move_value == "U") {
             app_.Move(player, model::Direction::NORTH);
             Sender::SendAPIResponse(http::status::ok, "{}"sv, std::move(send));
-            return { http::status::ok, ContentType::APP_JSON };
+            return { http::status::ok, MimeType::APP_JSON };
         }
         if (move_value == "D") {
             app_.Move(player, model::Direction::SOUTH);
             Sender::SendAPIResponse(http::status::ok, "{}"sv, std::move(send));
-            return { http::status::ok, ContentType::APP_JSON };
+            return { http::status::ok, MimeType::APP_JSON };
         }
         if (move_value == "L") {
             app_.Move(player, model::Direction::WEST);
             Sender::SendAPIResponse(http::status::ok, "{}"sv, std::move(send));
-            return { http::status::ok, ContentType::APP_JSON };
+            return { http::status::ok, MimeType::APP_JSON };
         }
         if (move_value == "R") {
             app_.Move(player, model::Direction::EAST);
             Sender::SendAPIResponse(http::status::ok, "{}"sv, std::move(send));
-            return { http::status::ok, ContentType::APP_JSON };
+            return { http::status::ok, MimeType::APP_JSON };
         }
         if (move_value == "") {
             app_.Stop(player);
             Sender::SendAPIResponse(http::status::ok, "{}"sv, std::move(send));
-            return { http::status::ok, ContentType::APP_JSON };
+            return { http::status::ok, MimeType::APP_JSON };
         }
         Sender::SendAPIResponse(http::status::bad_request, HttpBodies::ACTION_PARSE_ERROR, std::move(send));
-        return { http::status::bad_request, ContentType::APP_JSON };
+        return { http::status::bad_request, MimeType::APP_JSON };
     }
 
     template<typename Send>
@@ -410,21 +382,21 @@ private:
         }
         catch (std::exception& ex) {
             Sender::SendAPIResponse(http::status::bad_request, HttpBodies::TICK_PARSE_ERROR, std::move(send));
-            return { http::status::bad_request, ContentType::APP_JSON };
+            return { http::status::bad_request, MimeType::APP_JSON };
         }
         auto tick = json_body.find("timeDelta");
         if (tick == json_body.end() || !tick->value().is_int64()) {
             Sender::SendAPIResponse(http::status::bad_request, HttpBodies::TICK_PARSE_ERROR, std::move(send));
-            return { http::status::bad_request, ContentType::APP_JSON };
+            return { http::status::bad_request, MimeType::APP_JSON };
         }
         int tick_val = tick->value().get_int64();
         if (tick_val < 1) {
             Sender::SendAPIResponse(http::status::bad_request, HttpBodies::TICK_PARSE_ERROR, std::move(send));
-            return { http::status::bad_request, ContentType::APP_JSON };
+            return { http::status::bad_request, MimeType::APP_JSON };
         }
         app_.Tick(tick_val);
         Sender::SendAPIResponse(http::status::ok, "{}"sv, std::move(send));
-        return { http::status::ok, ContentType::APP_JSON };
+        return { http::status::ok, MimeType::APP_JSON };
     }
 
     bool ParseBearer(const std::string_view auth_header, std::string& token_to_write) const;

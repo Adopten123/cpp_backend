@@ -1,13 +1,31 @@
 #pragma once
 
+#include "http_server.h"
+#include "model.h"
+
+#include <boost/asio/io_context.hpp>
+#include <boost/json.hpp>
+#include <boost/log/trivial.hpp>
+#include <boost/log/expressions.hpp>
+#include <boost/log/utility/manipulators/add_value.hpp>
+#include <boost/log/utility/setup.hpp>
+#include <boost/log/utility/setup/console.hpp>
+#include <boost/date_time.hpp>
+#include <boost/chrono.hpp>
+#include <filesystem>
+#include <functional>
+#include <memory>
 #include <string_view>
 
 namespace http_handler {
 
 using namespace std::literals;
+namespace beast = boost::beast;
+namespace http = beast::http;
+namespace json = boost::json;
 
-struct ContentType {
-    ContentType() = delete;
+struct MimeType {
+    MimeType() = delete;
     constexpr static std::string_view TEXT_HTML = "text/html"sv;
     constexpr static std::string_view APP_JSON = "application/json"sv;
     constexpr static std::string_view TEXT_CSS = "text/css"sv;
@@ -75,6 +93,21 @@ struct HttpBodies {
     constexpr static std::string_view INVALID_TOKEN = R"({ "code": "invalidToken", "message": "Authorization header is missing" })"sv;
     constexpr static std::string_view TOKEN_UNKNOWN = R"({ "code": "unknownToken", "message": "Player token has not been found" })"sv;
     constexpr static std::string_view INVALID_CONTENT_TYPE = R"({"code": "invalidArgument", "message": "Invalid content type"} )"sv;
+};
+
+namespace utils {
+	std::vector<std::string_view> SplitRequest(std::string_view body);
+	json::object MapToJson(const model::Map* map);
+	json::array RoadsToJson(const model::Map* map);
+	json::array OfficesToJson(const model::Map* map);
+	json::array BuildingsToJson(const model::Map* map);
+
+    std::string_view GetMimeType(std::string_view extension);
+}
+
+struct ResponseData {
+    http::status code;
+    std::string_view content_type;
 };
 
 }
