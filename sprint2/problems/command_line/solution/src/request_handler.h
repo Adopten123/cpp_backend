@@ -55,10 +55,10 @@ public:
     }
 
 private:
-    friend APIRequestHandler;
+    friend APIHandler;
 
     const fs::path root_path_;
-    std::shared_ptr<APIRequestHandler> api_handler_;
+    std::shared_ptr<APIHandler> api_handler_;
 
     enum RequestType {
         API,

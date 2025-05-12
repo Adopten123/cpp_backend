@@ -91,108 +91,196 @@ public:
 };
 
 
-class APIRequestHandler : public std::enable_shared_from_this<APIRequestHandler> {
+class APIHandler : public std::enable_shared_from_this<APIHandler> {
 public:
     using Strand = net::strand<net::io_context::executor_type>;
 
-    explicit APIRequestHandler(app::Application& app, net::io_context& ioc, bool no_auto_tick);
+    explicit APIHandler(app::Application& app, net::io_context& ioc, bool no_auto_tick);
 
-    APIRequestHandler(const APIRequestHandler&) = delete;
-    APIRequestHandler& operator=(const APIRequestHandler&) = delete;
+    APIHandler(const APIHandler&) = delete;
+    APIHandler& operator=(const APIHandler&) = delete;
 
     template <typename Body, typename Allocator, typename Send>
-    ResponseData ProcessRequest(std::string_view target, Send&& send, const http::request<Body, http::basic_fields<Allocator>>&& req) {
-        auto unslashed = target.substr(1, target.length() - 1);
-        auto splitted = utils::SplitRequest(unslashed);
-        std::string_view method = std::string_view(req.method_string().data());
-        unsigned http_version = req.version();
-        if (splitted.size() < 3) {
-            return HttpResponseFactory::HandleBadRequest(std::move(send));
-        }
-        if (splitted[2] == RestApiLiteral::MAPS) {
-            if (splitted.size() == 4) {
-                return MapRequest(std::string(splitted[3].data(), splitted[3].size()), std::move(send));
-            }
-            if (splitted.size() == 3) {
-                HttpResponseFactory::HandleAPIResponse(http::status::ok, json::serialize(ProcessMapsRequestBody()), std::move(send));
-                return { http::status::ok , MimeType::APP_JSON };
-            }
-        }
-        if (splitted[2] == RestApiLiteral::MAP) {
-            if (splitted.size() != 4) {
-                return HttpResponseFactory::HandleBadRequest(std::move(send));
-            }
-            return MapRequest(std::string(splitted[3].data(), splitted[3].size()), std::move(send));
-        }
-        if (splitted[2] == RestApiLiteral::GAME) {
-            if (splitted.size() < 4) {
-                return HttpResponseFactory::HandleBadRequest(std::move(send));
-            }
-            if (splitted[3] == RestApiLiteral::JOIN) {
-                if (method != "POST") {
-                    return HttpResponseFactory::HandleMethodNotAllowed(std::move(send), "POST");
-                }
-                return JoinRequest(req.body(), std::move(send));
-            }
-            if (splitted[3] == RestApiLiteral::PLAYERS) {
-                if (method != "GET" && method != "HEAD") {
-                    return HttpResponseFactory::HandleMethodNotAllowed(std::move(send), "GET, HEAD");
-                }
-                std::string token = "";
-                auto token_valid = ParseBearer(std::move(req.base()[http::field::authorization]), token);
-                if (!token_valid) {
-                    HttpResponseFactory::HandleAPIResponse(http::status::unauthorized, RequestHttpBody::INVALID_TOKEN, std::move(send));
-                    return { http::status::unauthorized, MimeType::APP_JSON };
-                }
-                return PlayersRequest(std::move(token), std::move(send));
-            }
-            if (splitted[3] == RestApiLiteral::STATE) {
-                if (method != "GET" && method != "HEAD") {
-                    return HttpResponseFactory::HandleMethodNotAllowed(std::move(send), "GET, HEAD");
-                }
-                std::string token = "";
-                auto token_valid = ParseBearer(std::move(req.base()[http::field::authorization]), token);
-                if (!token_valid) {
-                    HttpResponseFactory::HandleAPIResponse(http::status::unauthorized, RequestHttpBody::INVALID_TOKEN, std::move(send));
-                    return { http::status::unauthorized, MimeType::APP_JSON };
-                }
-                return StateRequest(std::move(token), std::move(send));
-            }
-            if (splitted[3] == RestApiLiteral::PLAYER) {
-                if (splitted.size() == 4) {
-                    HttpResponseFactory::HandleAPIResponse(http::status::bad_request, RequestHttpBody::BAD_REQUEST, std::move(send));
-                    return { http::status::bad_request, MimeType::APP_JSON };
-                }
-                if (splitted[4] == RestApiLiteral::ACTION) {
-                    if (method != "POST") {
-                        return HttpResponseFactory::HandleMethodNotAllowed(std::move(send), "POST");
-                    }
-                    std::string token = "";
-                    auto token_valid = ParseBearer(std::move(req.base()[http::field::authorization]), token);
-                    if (!token_valid) {
-                        HttpResponseFactory::HandleAPIResponse(http::status::unauthorized, RequestHttpBody::INVALID_TOKEN, std::move(send));
-                        return { http::status::unauthorized, MimeType::APP_JSON };
-                    }
-                    std::string_view content_type = req.base()[http::field::content_type];
-                    if (content_type != MimeType::APP_JSON) {
-                        HttpResponseFactory::HandleAPIResponse(http::status::bad_request, RequestHttpBody::INVALID_CONTENT_TYPE, std::move(send));
-                        return { http::status::bad_request, MimeType::APP_JSON };
-                    }
-                    return ActionRequest(std::move(token), req.body(), std::move(send));
-                }
-            }
-            if (splitted[3] == RestApiLiteral::TICK) {
-                if (auto_tick_) {
-                    return HttpResponseFactory::HandleBadRequest(std::move(send));
-                }
-                if (method != "POST") {
-                    return HttpResponseFactory::HandleMethodNotAllowed(std::move(send), "POST");
-                }
-                return TickRequest(req.body(), std::move(send));
-            }
-        }
-        return HttpResponseFactory::HandleBadRequest(std::move(send));
-    }
+	ResponseData ProcessRequest(
+    	std::string_view target,
+    	Send&& send,
+    	const http::request<Body, http::basic_fields<Allocator>>&& req
+	) {
+    	const auto path_segments = utils::SplitRequest(target.substr(1));
+    	const std::string_view http_method = req.method_string();
+    	const auto http_version = req.version();
+
+    	if (path_segments.size() < 3) {
+        	return HttpResponseFactory::HandleBadRequest(std::forward<Send>(send));
+    	}
+
+    	const auto& resource = path_segments[2];
+
+    	if (resource == RestApiLiteral::MAPS) {
+        	if (path_segments.size() == 4) {
+            	return HandleMapRequest(
+                	std::string(path_segments[3]),
+                	std::forward<Send>(send)
+            	);
+        	}
+        	if (path_segments.size() == 3) {
+            	const auto response_body = json::serialize(ProcessMapsRequestBody());
+            	HttpResponseFactory::HandleAPIResponse(
+                	http::status::ok,
+                	response_body,
+                	std::forward<Send>(send)
+            	);
+            	return {http::status::ok, MimeType::APP_JSON};
+        	}
+    	}
+
+    	if (resource == RestApiLiteral::MAP) {
+        	if (path_segments.size() != 4) {
+            	return HttpResponseFactory::HandleBadRequest(std::forward<Send>(send));
+        	}
+        	return HandleMapRequest(
+            	std::string(path_segments[3]),
+           	 	std::forward<Send>(send)
+        	);
+    	}
+
+    	if (resource == RestApiLiteral::GAME) {
+        	if (path_segments.size() < 4) {
+            	return HttpResponseFactory::HandleBadRequest(std::forward<Send>(send));
+        	}
+
+        	const auto& action = path_segments[3];
+
+        	if (action == RestApiLiteral::JOIN) {
+            	if (http_method != "POST") {
+                	return HttpResponseFactory::HandleMethodNotAllowed(
+                    	std::forward<Send>(send),
+                    	"POST"
+                	);
+            	}
+            	return HandleJoinRequest(req.body(), std::forward<Send>(send));
+        	}
+
+        	if (action == RestApiLiteral::PLAYERS) {
+            	if (http_method != "GET" && http_method != "HEAD") {
+                	return HttpResponseFactory::HandleMethodNotAllowed(
+                    	std::forward<Send>(send),
+                    	"GET, HEAD"
+                	);
+            	}
+
+            	std::string auth_token;
+            	const bool valid_token = ParseBearer(
+                	req.base()[http::field::authorization],
+                	auth_token
+            	);
+
+            	if (!valid_token) {
+                	HttpResponseFactory::HandleAPIResponse(
+                    	http::status::unauthorized,
+                    	RequestHttpBody::INVALID_TOKEN,
+                    	std::forward<Send>(send)
+                	);
+                	return {http::status::unauthorized, MimeType::APP_JSON};
+            	}
+
+            	return HandlePlayersRequest(std::move(auth_token), std::forward<Send>(send));
+        	}
+
+        	if (action == RestApiLiteral::STATE) {
+            	if (http_method != "GET" && http_method != "HEAD") {
+                	return HttpResponseFactory::HandleMethodNotAllowed(
+                    	std::forward<Send>(send),
+                    	"GET, HEAD"
+                	);
+            	}
+
+            	std::string auth_token;
+            	const bool valid_token = ParseBearer(
+                	req.base()[http::field::authorization],
+                	auth_token
+            	);
+
+            	if (!valid_token) {
+                	HttpResponseFactory::HandleAPIResponse(
+                    	http::status::unauthorized,
+                    	RequestHttpBody::INVALID_TOKEN,
+                    	std::forward<Send>(send)
+                	);
+                	return {http::status::unauthorized, MimeType::APP_JSON};
+            	}
+
+            	return HandleStateRequest(std::move(auth_token), std::forward<Send>(send));
+        	}
+
+        	if (action == RestApiLiteral::PLAYER) {
+            	if (path_segments.size() == 4) {
+                	HttpResponseFactory::HandleAPIResponse(
+                    	http::status::bad_request,
+                    	RequestHttpBody::BAD_REQUEST,
+                    	std::forward<Send>(send)
+                	);
+                	return {http::status::bad_request, MimeType::APP_JSON};
+            	}
+
+            	if (path_segments[4] == RestApiLiteral::ACTION) {
+                	if (http_method != "POST") {
+                    	return HttpResponseFactory::HandleMethodNotAllowed(
+                        	std::forward<Send>(send),
+                        	"POST"
+                    	);
+                	}
+
+                	std::string auth_token;
+                	const bool valid_token = ParseBearer(
+                    	req.base()[http::field::authorization],
+                    	auth_token
+                	);
+
+                	if (!valid_token) {
+                    	HttpResponseFactory::HandleAPIResponse(
+                        	http::status::unauthorized,
+                        	RequestHttpBody::INVALID_TOKEN,
+                        	std::forward<Send>(send)
+                    	);
+                    	return {http::status::unauthorized, MimeType::APP_JSON};
+                	}
+
+                	if (req.base()[http::field::content_type] != MimeType::APP_JSON) {
+                    	HttpResponseFactory::HandleAPIResponse(
+                        	http::status::bad_request,
+                        	RequestHttpBody::INVALID_CONTENT_TYPE,
+                        	std::forward<Send>(send)
+                    	);
+                    	return {http::status::bad_request, MimeType::APP_JSON};
+                	}
+
+                	return HandleActionRequest(
+                    	std::move(auth_token),
+                    	req.body(),
+                    	std::forward<Send>(send)
+                	);
+            	}
+        	}
+
+        	if (action == RestApiLiteral::TICK) {
+            	if (auto_tick_) {
+                	return HttpResponseFactory::HandleBadRequest(std::forward<Send>(send));
+            	}
+
+            	if (http_method != "POST") {
+                	return HttpResponseFactory::HandleMethodNotAllowed(
+                    	std::forward<Send>(send),
+                    	"POST"
+                	);
+            	}
+
+            	return HandleTickRequest(req.body(), std::forward<Send>(send));
+        	}
+    	}
+
+    	return HttpResponseFactory::HandleBadRequest(std::forward<Send>(send));
+	}
 
     Strand& GetStrand() {
         return strand_;
@@ -206,7 +294,7 @@ private:
     json::array ProcessMapsRequestBody() const;
 
     template<typename Send>
-    ResponseData MapRequest(std::string id, Send&& send) {
+    ResponseData HandleMapRequest(std::string id, Send&& send) {
         model::Map::Id map_id(id);
         const auto* map = app_.FindMap(map_id);
         if (map) {
@@ -220,7 +308,7 @@ private:
     }
 
     template<typename Send>
-    ResponseData JoinRequest(std::string_view body, Send&& send) {
+    ResponseData HandleJoinRequest(std::string_view body, Send&& send) {
         json::object json_body;
         try {
             json_body = json::parse(body.data()).as_object();
@@ -261,7 +349,7 @@ private:
     }
 
     template<typename Send>
-    ResponseData PlayersRequest(std::string&& token, Send&& send) {
+    ResponseData HandlePlayersRequest(std::string&& token, Send&& send) {
         auto* player = app_.FindByToken(app::Token(token));
         if (!player) {
             HttpResponseFactory::HandleAPIResponse(http::status::unauthorized, RequestHttpBody::TOKEN_UNKNOWN, std::move(send));
@@ -276,7 +364,7 @@ private:
     }
 
     template<typename Send>
-    ResponseData StateRequest(std::string&& token, Send&& send) {
+    ResponseData HandleStateRequest(std::string&& token, Send&& send) {
         auto* player = app_.FindByToken(app::Token(token));
         if (!player) {
             HttpResponseFactory::HandleAPIResponse(http::status::unauthorized, RequestHttpBody::TOKEN_UNKNOWN, std::move(send));
@@ -312,7 +400,7 @@ private:
     }
 
     template<typename Send>
-    ResponseData ActionRequest(std::string&& token, std::string_view body, Send&& send) {
+    ResponseData HandleActionRequest(std::string&& token, std::string_view body, Send&& send) {
         auto* player = app_.FindByToken(app::Token(token));
         if (!player) {
             HttpResponseFactory::HandleAPIResponse(http::status::unauthorized, RequestHttpBody::TOKEN_UNKNOWN, std::move(send));
@@ -362,7 +450,7 @@ private:
     }
 
     template<typename Send>
-    ResponseData TickRequest(std::string_view body, Send&& send) {
+    ResponseData HandleTickRequest(std::string_view body, Send&& send) {
         json::object json_body;
         try {
             json_body = json::parse(body.data()).as_object();

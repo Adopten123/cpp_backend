@@ -6,7 +6,7 @@ namespace http_handler {
 
 RequestHandler::RequestHandler(app::Application& app, const char* path_to_static, net::io_context& ioc, bool no_auto_tick)
     : root_path_(path_to_static),
-    api_handler_(std::make_shared<APIRequestHandler>(app, ioc, no_auto_tick)){
+    api_handler_(std::make_shared<APIHandler>(app, ioc, no_auto_tick)){
 }
 
 
