@@ -13,16 +13,6 @@ namespace sys = boost::system;
 namespace logging = boost::log;
 namespace net = boost::asio;
 
-class ExtensionToConetntTypeMapper {
-public:
-    ExtensionToConetntTypeMapper();
-
-    std::string_view operator()(std::string_view extension);
-
-private:
-    std::unordered_map<std::string_view, std::string_view> map_;
-};
-
 class Sender {
 public:
     Sender() = delete;
@@ -98,9 +88,6 @@ public:
         send(response);
         return { http::status::method_not_allowed, MimeType::APP_JSON };
     }
-
-private:
-    static ExtensionToConetntTypeMapper mapper_;
 };
 
 

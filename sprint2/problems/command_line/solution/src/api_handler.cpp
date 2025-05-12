@@ -2,9 +2,6 @@
 
 namespace http_handler {
 
-ExtensionToConetntTypeMapper Sender::mapper_;
-
-
 APIRequestHandler::APIRequestHandler(app::Application& app, net::io_context& ioc, bool no_auto_tick)
     : app_{ app },
     strand_(net::make_strand(ioc)),
@@ -21,36 +18,6 @@ json::array APIRequestHandler::ProcessMapsRequestBody() const {
     }
     return maps_body;
 }
-
-ExtensionToConetntTypeMapper::ExtensionToConetntTypeMapper() {
-    map_[FileExtensions::HTML] = MimeType::TEXT_HTML;
-    map_[FileExtensions::HTM] = MimeType::TEXT_HTML;
-    map_[FileExtensions::JSON] = MimeType::APP_JSON;
-    map_[FileExtensions::CSS] = MimeType::TEXT_CSS;
-    map_[FileExtensions::TXT] = MimeType::TEXT_PLAIN;
-    map_[FileExtensions::JS] = MimeType::TEXT_JAVASCRIPT;
-    map_[FileExtensions::XML] = MimeType::APP_XML;
-    map_[FileExtensions::PNG] = MimeType::PNG;
-    map_[FileExtensions::JPEG] = MimeType::JPEG;
-    map_[FileExtensions::JPG] = MimeType::JPEG;
-    map_[FileExtensions::JPE] = MimeType::JPEG;
-    map_[FileExtensions::GIF] = MimeType::GIF;
-    map_[FileExtensions::BMP] = MimeType::BMP;
-    map_[FileExtensions::ICO] = MimeType::ICO;
-    map_[FileExtensions::TIFF] = MimeType::TIFF;
-    map_[FileExtensions::TIF] = MimeType::TIFF;
-    map_[FileExtensions::SVG] = MimeType::SVG;
-    map_[FileExtensions::SVGZ] = MimeType::SVG;
-    map_[FileExtensions::MP3] = MimeType::MP3;
-}
-
-std::string_view ExtensionToConetntTypeMapper::operator()(std::string_view extension) {
-    if (map_.contains(extension)) {
-        return map_.at(extension);
-    }
-    return MimeType::UNKNOWN;
-}
-
 
 bool APIRequestHandler::ParseBearer(const std::string_view auth_header, std::string& token_to_write) const {
     if (!auth_header.starts_with("Bearer ")) {
