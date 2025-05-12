@@ -95,9 +95,9 @@ std::string_view GetMimeType(std::string_view extension) {
         {"mp3"sv, MimeType::MP3},
     };
 
-    if (mime_types.contains(extension)) {
+    if (mime_types.contains(extension))
         return mime_types.at(extension);
-    }
+
     return MimeType::UNKNOWN;
 }
 
