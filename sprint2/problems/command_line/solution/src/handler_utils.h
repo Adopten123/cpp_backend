@@ -43,29 +43,6 @@ struct MimeType {
     constexpr static std::string_view UNKNOWN = "application/octet-stream"sv;
 };
 
-struct FileExtensions {
-    FileExtensions() = delete;
-    constexpr static std::string_view HTML = "html"sv;
-    constexpr static std::string_view HTM = "htm"sv;
-    constexpr static std::string_view JSON = "json"sv;
-    constexpr static std::string_view CSS = "css"sv;
-    constexpr static std::string_view TXT = "txt"sv;
-    constexpr static std::string_view JS = "js"sv;
-    constexpr static std::string_view XML = "xml"sv;
-    constexpr static std::string_view PNG = "png"sv;
-    constexpr static std::string_view JPEG = "jpeg"sv;
-    constexpr static std::string_view JPG = "jpg"sv;
-    constexpr static std::string_view JPE = "jpe"sv;
-    constexpr static std::string_view GIF = "gif"sv;
-    constexpr static std::string_view BMP = "bmp"sv;
-    constexpr static std::string_view ICO = "ico"sv;
-    constexpr static std::string_view TIFF = "tiff"sv;
-    constexpr static std::string_view TIF = "tif"sv;
-    constexpr static std::string_view SVG = "svg"sv;
-    constexpr static std::string_view SVGZ = "svgz"sv;
-    constexpr static std::string_view MP3 = "mp3"sv;
-};
-
 struct RestApiLiterals {
     RestApiLiterals() = delete;
     constexpr static std::string_view API_V1 = "/api/v1/"sv;

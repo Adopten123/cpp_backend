@@ -30,36 +30,37 @@ RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target
     return RequestHandler::RequestType::FILE;
 }
 
-std::string RequestHandler::DecodeURL(std::string_view url) const {
-    std::vector<char> text;
-    text.reserve(url.length());
-    for (size_t i = 0; i < url.length(); ++i) {
+std::string RequestHandler::URLDecode(std::string_view url) const {
+    std::string result;
+    result.reserve(url.size());
+    for (size_t i = 0; i < url.size(); ++i) {
         if (url[i] == '%') {
-            if (i + 2 < url.length()) {
-                char hex1 = url[i + 1];
-                char hex2 = url[i + 2];
-
-                if (isxdigit(hex1) && isxdigit(hex2)) {
-                    int code = std::stoi(std::string() + hex1 + hex2, nullptr, 16);
-                    text.emplace_back(static_cast<char>(code));
+            if (i + 2 < url.size()) {
+                int hi = HexToInt(url[i+1]);
+                int lo = HexToInt(url[i+2]);
+                if (hi == -1 || lo == -1) {
+                    result += url[i];
+                } else {
+                    result += static_cast<char>((hi << 4) | lo);
                     i += 2;
                 }
-                else {
-                    text.emplace_back('%');
-                }
+            } else {
+                result += url[i];
             }
-            else {
-                text.emplace_back('%');
-            }
-        }
-        else if (url[i] == '+') {
-            text.emplace_back(' ');
-        }
-        else {
-            text.emplace_back(url[i]);
+        } else if (url[i] == '+') {
+            result += ' ';
+        } else {
+            result += url[i];
         }
     }
-    return std::string(text.data(), text.size());
+    return result;
+}
+
+int RequestHandler::HexToInt(char c) const {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'A' && c <= 'F') return 10 + c - 'A';
+    if (c >= 'a' && c <= 'f') return 10 + c - 'a';
+    return -1;
 }
 
 }  // namespace http_handler

@@ -29,7 +29,7 @@ public:
 
     template <typename Body, typename Allocator, typename Send>
     void operator()(http::request<Body, http::basic_fields<Allocator>>&& req, Send&& send, std::function<void(ResponseData&&)> handle) {
-        auto string_target = DecodeURL(req.target());
+        auto string_target = URLDecode(req.target());
         std::string_view target(string_target);
         switch(CheckRequest(target)) {
         case RequestType::API:
@@ -67,7 +67,8 @@ private:
     };
 
     RequestType CheckRequest(std::string_view target) const;
-    std::string DecodeURL(std::string_view url) const;
+    std::string URLDecode(std::string_view url) const;
+    int HexToInt(char c) const;
 };
 
 }  // namespace http_handler
