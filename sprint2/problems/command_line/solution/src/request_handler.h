@@ -43,13 +43,13 @@ public:
             break;
         }
         case RequestType::FILE:
-            return handle(Sender::SendFileResponseOr404(root_path_, target, std::move(send)));
+            return handle(HttpResponseFactory::HandleFileResponseOr404(root_path_, target, std::move(send)));
             break;
         case RequestType::BAD_REQUEST:
-            return handle(Sender::SendBadRequest(std::move(send)));
+            return handle(HttpResponseFactory::HandleBadRequest(std::move(send)));
             break;
         default:
-            return handle(Sender::SendBadRequest(std::move(send)));
+            return handle(HttpResponseFactory::HandleBadRequest(std::move(send)));
             break;
         }
     }

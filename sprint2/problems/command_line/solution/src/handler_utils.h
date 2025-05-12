@@ -43,8 +43,8 @@ struct MimeType {
     constexpr static std::string_view UNKNOWN = "application/octet-stream"sv;
 };
 
-struct RestApiLiterals {
-    RestApiLiterals() = delete;
+struct RestApiLiteral {
+    RestApiLiteral() = delete;
     constexpr static std::string_view API_V1 = "/api/v1/"sv;
     constexpr static std::string_view MAPS = "maps"sv;
     constexpr static std::string_view MAP = "map"sv;
@@ -57,8 +57,8 @@ struct RestApiLiterals {
     constexpr static std::string_view TICK = "tick"sv;
 };
 
-struct HttpBodies {
-    HttpBodies() = delete;
+struct RequestHttpBody {
+    RequestHttpBody() = delete;
     constexpr static std::string_view BAD_REQUEST = R"({ "code": "badRequest", "message": "Bad request" })"sv;
     constexpr static std::string_view MAP_NOT_FOUND = R"({ "code": "mapNotFound", "message": "Map not found" })"sv;
     constexpr static std::string_view FILE_NOT_FOUND = R"({ "code": "fileNotFound", "message": "File not found" })"sv;

@@ -11,7 +11,7 @@ RequestHandler::RequestHandler(app::Application& app, const char* path_to_static
 
 
 RequestHandler::RequestType RequestHandler::CheckRequest(std::string_view target) const {
-    if (target.starts_with(RestApiLiterals::API_V1)) {
+    if (target.starts_with(RestApiLiteral::API_V1)) {
         return RequestHandler::RequestType::API;
     }
     if (target.starts_with("/api")) {
