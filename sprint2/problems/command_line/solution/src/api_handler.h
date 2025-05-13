@@ -317,38 +317,47 @@ private:
 
     template<typename Send>
     ResponseData HandleStateRequest(std::string&& token, Send&& send) {
-        auto* player = app_.FindByToken(app::Token(token));
+        const auto* player = app_.FindByToken(app::Token(std::move(token)));
         if (!player) {
-            HttpResponseFactory::HandleAPIResponse(http::status::unauthorized, RequestHttpBody::TOKEN_UNKNOWN, std::move(send));
-            return { http::status::unauthorized, MimeType::APP_JSON };
+            HttpResponseFactory::HandleAPIResponse(
+                http::status::unauthorized,
+                RequestHttpBody::TOKEN_UNKNOWN,
+                std::move(send)
+            );
+            return {http::status::unauthorized, MimeType::APP_JSON};
         }
+
         json::object result;
         json::object players;
-        for (const auto& dog : app_.GetDogs(player)) {
-            json::object data;
-            auto pos = dog->GetPosition();
-            auto speed = dog->GetSpeed();
-            data["pos"] = { pos.x, pos.y };
-            data["speed"] = { speed.vx, speed.vy };
+
+        const auto& dogs = app_.GetDogs(player);
+        for (const auto& dog : dogs) {
+            json::object dog_data;
+
+            const auto pos = dog->GetPosition();
+            dog_data["pos"] = json::array{pos.x, pos.y};
+
+            const auto speed = dog->GetSpeed();
+            dog_data["speed"] = json::array{speed.vx, speed.vy};
+
             switch (dog->GetDirection()) {
-            case model::Direction::NORTH:
-                data["dir"] = "U";
-                break;
-            case model::Direction::SOUTH:
-                data["dir"] = "D";
-                break;
-            case model::Direction::EAST:
-                data["dir"] = "R";
-                break;
-            case model::Direction::WEST:
-                data["dir"] = "L";
-                break;
+                case model::Direction::NORTH:  dog_data["dir"] = "U"; break;
+                case model::Direction::SOUTH:  dog_data["dir"] = "D"; break;
+                case model::Direction::EAST:   dog_data["dir"] = "R"; break;
+                case model::Direction::WEST:   dog_data["dir"] = "L"; break;
             }
-            players[std::to_string(dog->GetId())] = data;
+
+            players[std::to_string(dog->GetId())] = std::move(dog_data);
         }
-        result["players"] = players;
-        HttpResponseFactory::HandleAPIResponse(http::status::ok, json::serialize(result), std::move(send));
-        return { http::status::ok, MimeType::APP_JSON };
+
+        result["players"] = std::move(players);
+
+        HttpResponseFactory::HandleAPIResponse(
+            http::status::ok,
+            json::serialize(result),
+            std::move(send)
+        );
+        return {http::status::ok, MimeType::APP_JSON};
     }
 
     template<typename Send>
