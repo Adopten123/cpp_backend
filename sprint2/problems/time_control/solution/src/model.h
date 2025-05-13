@@ -86,11 +86,11 @@ struct Offset {
 
 class Road {
     struct HorizontalTag {
-        explicit HorizontalTag() = default;
+        HorizontalTag() = default;
     };
 
     struct VerticalTag {
-        explicit VerticalTag() = default;
+        VerticalTag() = default;
     };
 
 public:
@@ -261,14 +261,6 @@ public:
     void SetPosition(Position pos) {
         position_ = pos;
     }
-    /*
-    void SetDirection(Direction dir) {
-        direction_ = dir;
-    }
-
-    void SetSpeed(Speed speed) {
-        speed_ = speed;
-    }*/
 
     void Move(Direction dir, double speed) {
         direction_ = dir;
@@ -297,22 +289,22 @@ public:
     }
 
 private:
+    inline static int start_id_ = 0;
+
+    static int GetNextId() {
+        return start_id_++;
+    }
+
     const int id_;
     std::string name_;
     Position position_ = {0., 0.};
     Speed speed_ = {0., 0.};
     Direction direction_ = Direction::NORTH;
-
-    static int start_id_;
-
-    static int GetNextId() {
-        return start_id_++;
-    }
 };
 
 class GameSession {
 public:
-    explicit GameSession(Map* map);
+    explicit GameSession(Map* map, bool randomize_spawn);
 
     std::vector<const Dog*> GetDogs() const;
 
@@ -322,7 +314,7 @@ public:
         return map_->GetSpeed();
     }
 
-    void Tick(int delta) {
+    void Tick(unsigned delta) {
         for (auto& dog : dogs_) {
             if (dog.GetSpeed() != Speed{}) {
                 auto [stop, new_pos] = CalculateMove(dog.GetPosition(), dog.GetSpeed(), delta);
@@ -338,8 +330,9 @@ private:
     std::forward_list<Dog> dogs_;
     Map* map_;
     std::unordered_map<Point, std::vector<const Road*>, PointHash> roads_graph_;
+    bool randomize_spawn_;
 
-    std::pair<bool, Position> CalculateMove(Position pos, Speed speed, int delta) const;
+    std::pair<bool, Position> CalculateMove(Position pos, Speed speed, unsigned delta) const;
 };
 
 class Game {
@@ -366,15 +359,15 @@ public:
         return nullptr;
     }
 
-    void StartSessions() {
+    void StartSessions(bool randomize_spawn) {
         sessions_.clear();
         sessions_.reserve(maps_.size());
         for (auto& map : maps_) {
-            sessions_.push_back(GameSession{ &map });
+            sessions_.push_back(GameSession{ &map, randomize_spawn });
         }
     }
 
-    void Tick(int delta) {
+    void Tick(unsigned delta) {
         for (auto& session : sessions_) {
             session.Tick(delta);
         }
@@ -390,80 +383,3 @@ private:
 };
 
 }  // namespace model
-
-namespace detail {
-    struct TokenTag {};
-}  // namespace detail
-
-namespace app {
-
-using Token = util::Tagged<std::string, detail::TokenTag>;
-
-class TokensGen {
-public:
-    Token GetToken();
-
-private:
-    std::random_device random_device_;
-    std::mt19937_64 generator1_{ [this] {
-        std::uniform_int_distribution<std::mt19937_64::result_type> dist;
-        return dist(random_device_);
-    }() };
-    std::mt19937_64 generator2_{ [this] {
-        std::uniform_int_distribution<std::mt19937_64::result_type> dist;
-        return dist(random_device_);
-    }() };
-    // ×òîáû ñãåíåðèðîâàòü òîêåí, ïîëó÷èòå èç generator1_ è generator2_
-    // äâà 64-ðàçðÿäíûõ ÷èñëà è, ïåðåâåäÿ èõ â hex-ñòðîêè, ñêëåéòå â îäíó.
-    // Âû ìîæåòå ïîýêñïåðèìåíòèðîâàòü ñ àëãîðèòìîì ãåíåðèðîâàíèÿ òîêåíîâ,
-    // ÷òîáû ñäåëàòü èõ ïîäáîð åù¸ áîëåå çàòðóäíèòåëüíûì
-};
-
-class Player {
-public:
-    explicit Player(Token token, model::GameSession* session, model::Dog* dog);
-
-    Token GetToken() const {
-        return token_;
-    }
-
-    int GetId() const noexcept {
-        return id_;
-    }
-
-    const model::GameSession* GetSession() const noexcept {
-        return session_;
-    }
-
-    model::Dog* GetDog() noexcept {
-        return dog_;
-    }
-
-private:
-    int id_;
-    model::GameSession* session_;
-    model::Dog* dog_;
-    Token token_;
-    static int start_id_;
-
-    static int GetNextId() {
-        return start_id_++;
-    }
-};
-
-class Players {
-public:
-    Player& AddPlayer(model::Dog&& dog, model::GameSession* session);
-
-    Player* FindByToken(const Token& token);
-
-private:
-    using TokenHasher = util::TaggedHasher<Token>;
-    using TokensToPlayers = std::unordered_map<Token, size_t, TokenHasher>;
-
-    std::vector<Player> players_;
-    TokensToPlayers tokens_to_players_;
-    TokensGen token_gen_;
-};
-
-}  // namespace app

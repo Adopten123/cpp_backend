@@ -1,19 +1,22 @@
 #pragma once
 
 #include <filesystem>
-
 #include <boost/json.hpp>
-#include "model.h"
 
+#include "model.h"
 
 namespace json_loader {
 
     namespace json = boost::json;
 
-    model::Road ParseRoad(const json::value& road_json);
-    model::Building ParseBuilding(const json::value& building_json);
-    model::Office ParseOffice(const json::value& office_json);
-
     model::Game LoadGame(const std::filesystem::path& json_path);
+
+    std::string ReadFileToString(const std::filesystem::path& filePath);
+
+    model::Building JsonToBuilding(const json::object& obj);
+
+    model::Office JsonToOffice(const json::object& obj);
+
+    model::Road JsonToRoad(const json::object& obj);
 
 }  // namespace json_loader

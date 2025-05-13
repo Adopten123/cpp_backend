@@ -1,4 +1,10 @@
 #pragma once
+#include <compare>
+#include <forward_list>
+#include <iomanip>
+#include <iostream>
+#include <random>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -14,6 +20,8 @@ using Coord = Dimension;
 
 struct ModelLiterals {
     ModelLiterals() = delete;
+    constexpr static std::string_view DEFAULT_DOG_SPEED = "defaultDogSpeed"sv;
+    constexpr static std::string_view DOG_SPEED = "dogSpeed"sv;
     constexpr static std::string_view MAPS = "maps"sv;
     constexpr static std::string_view ID = "id"sv;
     constexpr static std::string_view NAME = "name"sv;
@@ -32,8 +40,35 @@ struct ModelLiterals {
     constexpr static std::string_view BUILDINGS = "buildings"sv;
 };
 
+struct Position {
+    double x, y;
+
+    auto operator<=>(const Position&) const = default;
+};
+
+struct Speed {
+    double vx, vy;
+
+    auto operator<=>(const Speed&) const = default;
+};
+
+enum Direction {
+    NORTH,
+    SOUTH,
+    WEST,
+    EAST
+};
+
 struct Point {
     Coord x, y;
+
+    bool operator==(const Point& other) const = default;
+};
+
+struct PointHash {
+    size_t operator()(const Point& p) const {
+        return std::hash<int>{}(p.x) ^ (std::hash<int>{}(p.y) << 1);
+    }
 };
 
 struct Size {
@@ -51,11 +86,11 @@ struct Offset {
 
 class Road {
     struct HorizontalTag {
-        explicit HorizontalTag() = default;
+        HorizontalTag() = default;
     };
 
     struct VerticalTag {
-        explicit VerticalTag() = default;
+        VerticalTag() = default;
     };
 
 public:
@@ -167,6 +202,14 @@ public:
         return offices_;
     }
 
+    void SetSpeed(double speed) {
+        speed_ = speed;
+    }
+
+    double GetSpeed() {
+        return speed_;
+    }
+
     void AddRoad(const Road& road) {
         roads_.emplace_back(road);
     }
@@ -184,9 +227,112 @@ private:
     std::string name_;
     Roads roads_;
     Buildings buildings_;
+    double speed_;
 
     OfficeIdToIndex warehouse_id_to_index_;
     Offices offices_;
+};
+
+class Dog {
+public:
+    explicit Dog(std::string&& name) : id_(GetNextId()), name_(std::move(name)) {
+    }
+
+    int GetId() const {
+        return id_;
+    }
+
+    const std::string& GetName() const {
+        return name_;
+    }
+
+    Position GetPosition() const {
+        return position_;
+    }
+
+    Direction GetDirection() const {
+        return direction_;
+    }
+
+    Speed GetSpeed() const {
+        return speed_;
+    }
+
+    void SetPosition(Position pos) {
+        position_ = pos;
+    }
+
+    void Move(Direction dir, double speed) {
+        direction_ = dir;
+        switch (dir) {
+        case Direction::NORTH:
+            speed_ = {0., -speed};
+            return;
+        case Direction::SOUTH:
+            speed_ = {0., speed};
+            return;
+        case Direction::WEST:
+            speed_ = {-speed, 0.};
+            return;
+        case Direction::EAST:
+            speed_ = {speed, 0.};
+            return;
+        }
+    }
+
+    void Stop() {
+        speed_ = {};
+    }
+
+    void ResetDirection() {
+        direction_ = Direction::NORTH;
+    }
+
+private:
+    inline static int start_id_ = 0;
+
+    static int GetNextId() {
+        return start_id_++;
+    }
+
+    const int id_;
+    std::string name_;
+    Position position_ = {0., 0.};
+    Speed speed_ = {0., 0.};
+    Direction direction_ = Direction::NORTH;
+};
+
+class GameSession {
+public:
+    explicit GameSession(Map* map, bool randomize_spawn);
+
+    std::vector<const Dog*> GetDogs() const;
+
+    Dog* AddDog(Dog&& dog);
+
+    double GetSpeed() const {
+        return map_->GetSpeed();
+    }
+
+    void Tick(unsigned delta) {
+        for (auto& dog : dogs_) {
+            if (dog.GetSpeed() != Speed{}) {
+                auto [stop, new_pos] = CalculateMove(dog.GetPosition(), dog.GetSpeed(), delta);
+                dog.SetPosition(new_pos);
+                if (stop) {
+                    dog.Stop();
+                }
+            }
+        }
+    }
+
+private:
+    std::forward_list<Dog> dogs_;
+    Map* map_;
+    std::unordered_map<Point, std::vector<const Road*>, PointHash> roads_graph_;
+    bool randomize_spawn_;
+
+    std::pair<bool, Position> CalculateMove(Position pos, Speed speed, unsigned delta) const;
 };
 
 class Game {
@@ -206,12 +352,34 @@ public:
         return nullptr;
     }
 
+    GameSession* FindSession(const Map::Id& id) {
+        if (auto it = map_id_to_index_.find(id); it != map_id_to_index_.end()) {
+            return &sessions_.at(it->second);
+        }
+        return nullptr;
+    }
+
+    void StartSessions(bool randomize_spawn) {
+        sessions_.clear();
+        sessions_.reserve(maps_.size());
+        for (auto& map : maps_) {
+            sessions_.push_back(GameSession{ &map, randomize_spawn });
+        }
+    }
+
+    void Tick(unsigned delta) {
+        for (auto& session : sessions_) {
+            session.Tick(delta);
+        }
+    }
+
 private:
     using MapIdHasher = util::TaggedHasher<Map::Id>;
     using MapIdToIndex = std::unordered_map<Map::Id, size_t, MapIdHasher>;
 
     std::vector<Map> maps_;
     MapIdToIndex map_id_to_index_;
+    std::vector<GameSession> sessions_;
 };
 
 }  // namespace model

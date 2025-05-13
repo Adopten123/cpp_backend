@@ -28,8 +28,14 @@ add_executable(game_server
         src/json_loader.cpp
         src/request_handler.cpp
         src/request_handler.h
-        src/player.h
-        src/player.cpp
+        src/logging_handler.h
+        src/logging_handler.cpp
+        src/api_handler.h
+        src/api_handler.cpp
+        src/handler_utils.h
+        src/handler_utils.cpp
+        src/player_models.h
+        src/player_models.cpp
 )
 target_include_directories(game_server PRIVATE CONAN_PKG::boost)
 target_link_libraries(game_server PRIVATE CONAN_PKG::boost)

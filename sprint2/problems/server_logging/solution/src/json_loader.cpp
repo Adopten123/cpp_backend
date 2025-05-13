@@ -1,80 +1,93 @@
 #include "json_loader.h"
+
 #include <fstream>
-#include <boost/json.hpp>
 
 namespace json_loader {
-
-namespace json = boost::json;
-
-model::Road ParseRoad(const json::value& road_json){
-    int x0 = road_json.at("x0").as_int64();
-    int y0 = road_json.at("y0").as_int64();
-
-	if (road_json.as_object().contains("x1")) {
-    	int x1 = road_json.at("x1").as_int64();
-    	return model::Road(model::Road::HORIZONTAL, {x0,y0}, x1);
-    } else {
-   		int y1 = road_json.at("y1").as_int64();
-        return model::Road(model::Road::VERTICAL, {x0,y0}, y1);
-    }
-
-}
-model::Building ParseBuilding(const json::value& building_json) {
-	int x = building_json.at("x").as_int64();
-    int y = building_json.at("y").as_int64();
-    int w = building_json.at("w").as_int64();
-    int h = building_json.at("h").as_int64();
-
-    return model::Building{model::Rectangle{{x, y}, {w, h}}};
-}
-model::Office ParseOffice(const json::value& office_json) {
-	std::string id = office_json.at("id").as_string().c_str();
-    int x = office_json.at("x").as_int64();
-    int y = office_json.at("y").as_int64();
-    int offsetX = office_json.at("offsetX").as_int64();
-    int offsetY = office_json.at("offsetY").as_int64();
-
-    return model::Office(model::Office::Id{id}, {x, y}, {offsetX, offsetY});
-}
 
 model::Game LoadGame(const std::filesystem::path& json_path) {
     // Загрузить содержимое файла json_path, например, в виде строки
     // Распарсить строку как JSON, используя boost::json::parse
     // Загрузить модель игры из файла
-    std::ifstream file(json_path);
-    if (!file.is_open())
-      throw std::runtime_error("Config file not found");
-
-    std::string json_str((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    json::value json_obj = json::parse(json_str);
-
     model::Game game;
-
-    for (const auto& map_json : json_obj.at("maps").as_array()) {
-        auto& map_obj = map_json.as_object();
-    	std::string id = map_obj.at("id").as_string().c_str();
-    	std::string name = map_obj.at("name").as_string().c_str();
-    	model::Map map(model::Map::Id{id}, name);
-
-        for (const auto& road_json : map_obj.at("roads").as_array()) {
-          	model::Road road = ParseRoad(road_json);
-        	map.AddRoad(road);
+    auto json_config = json::parse(ReadFileToString(json_path));
+    auto obj = json_config.as_object();
+    double default_speed;
+    if (auto speed = obj.find(std::string(model::ModelLiterals::DEFAULT_DOG_SPEED)); speed != obj.end()) {
+        default_speed = speed->value().as_double();
+    }
+    else {
+        default_speed = 1.;
+    }
+    for (const auto& parsed_map : obj.at(std::string(model::ModelLiterals::MAPS)).as_array()) {
+        json::object object_map = parsed_map.as_object();
+        auto parsed_id = object_map.at(std::string(model::ModelLiterals::ID)).as_string().c_str();
+        model::Map model_map(model::Map::Id(parsed_id), object_map.at(std::string(model::ModelLiterals::NAME)).as_string().c_str());
+        if (auto speed = object_map.find(std::string(model::ModelLiterals::DOG_SPEED)); speed != obj.end()) {
+            if (speed->value().is_double()) {
+                model_map.SetSpeed(speed->value().get_double());
+            }
+            else {
+                model_map.SetSpeed(default_speed);
+            }
         }
-
-        for (const auto& building_json : map_obj.at("buildings").as_array()) {
-            model::Building building = ParseBuilding(building_json);
-          	map.AddBuilding(building);
+        else {
+            model_map.SetSpeed(default_speed);
         }
-
-        for (const auto& office_json : map_obj.at("offices").as_array()) {
-          	model::Office office = ParseOffice(office_json);
-          	map.AddOffice(office);
+        for (const auto& building : object_map.at(std::string(model::ModelLiterals::BUILDINGS)).as_array()) {
+            model_map.AddBuilding(JsonToBuilding(building.as_object()));
         }
+        for (const auto& road : object_map.at(std::string(model::ModelLiterals::ROADS)).as_array()) {
+            model_map.AddRoad(JsonToRoad(road.as_object()));
+        }
+        for (const auto& office : object_map.at(std::string(model::ModelLiterals::OFFICES)).as_array()) {
+            model_map.AddOffice(JsonToOffice(office.as_object()));
+        }
+        game.AddMap(model_map);
+    }
+    return game;
+}
 
-        game.AddMap(std::move(map));
+std::string ReadFileToString(const std::filesystem::path& filePath) {
+    std::ifstream file(filePath);
+
+    if (!file.is_open()) {
+        throw std::runtime_error("Не удалось открыть файл: " + filePath.string());
     }
 
-    return game;
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+
+    return buffer.str();
+}
+
+model::Building JsonToBuilding(const json::object& obj) {
+    model::Rectangle rect{ { obj.at(std::string(model::ModelLiterals::POSITION_X)).to_number<int>()
+                , obj.at(std::string(model::ModelLiterals::POSITION_Y)).to_number<int>() }
+        , { obj.at(std::string(model::ModelLiterals::MODEL_SIZE_WIDTH)).to_number<int>()
+                , obj.at(std::string(model::ModelLiterals::MODEL_SIZE_HEIGHT)).to_number<int>() } };
+    return model::Building(rect);
+}
+
+model::Office JsonToOffice(const json::object& obj) {
+
+    return model::Office(model::Office::Id(obj.at(std::string(model::ModelLiterals::ID)).as_string().c_str())
+        , { obj.at(std::string(model::ModelLiterals::POSITION_X)).to_number<int>()
+                , obj.at(std::string(model::ModelLiterals::POSITION_Y)).to_number<int>() }
+        , {obj.at(std::string(model::ModelLiterals::OFFSET_X)).to_number<int>()
+                , obj.at(std::string(model::ModelLiterals::OFFSET_Y)).to_number<int>() });
+}
+
+model::Road JsonToRoad(const json::object& obj) {
+    if (obj.contains(std::string(model::ModelLiterals::END_X))) {
+        return model::Road(model::Road::HORIZONTAL
+            , { obj.at(std::string(model::ModelLiterals::START_X)).to_number<int>()
+                    , obj.at(std::string(model::ModelLiterals::START_Y)).to_number<int>() }
+            , obj.at(std::string(model::ModelLiterals::END_X)).to_number<int>());
+    }
+    return model::Road(model::Road::VERTICAL
+        , { obj.at(std::string(model::ModelLiterals::START_X)).to_number<int>()
+                , obj.at(std::string(model::ModelLiterals::START_Y)).to_number<int>() }
+        , obj.at(std::string(model::ModelLiterals::END_Y)).to_number<int>());
 }
 
 }  // namespace json_loader
