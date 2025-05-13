@@ -185,7 +185,7 @@ int main(int argc, const char* argv[]) {
                 throw std::runtime_error("Wrong tick time");
             }
             auto ticker = std::make_shared<Ticker>(handler->GetStrand(), std::chrono::milliseconds(args->tick_time),
-                [&app](std::chrono::milliseconds delta) { app.Tick(delta.count()); }
+                [&app](std::chrono::milliseconds delta) { app.Tick((unsigned int)delta.count()); }
             );
             ticker->Start();
         }
