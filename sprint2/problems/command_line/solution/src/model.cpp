@@ -48,23 +48,35 @@ std::vector<const Dog*> GameSession::GetDogs() const {
 
 Dog* GameSession::AddDog(Dog&& dog) {
     auto roads = map_->GetRoads();
+
     if (randomize_spawn_) {
         std::default_random_engine generator(roads.size());
         std::uniform_int_distribution rand_road{ 0, static_cast<int>(roads.size()) - 1 };
+
         auto& road = roads[rand_road(generator)];
-        if (road.IsHorizontal()) {
-            std::uniform_real_distribution rand_pos{ static_cast<double>(road.GetStart().x), static_cast<double>(road.GetEnd().x) };
-            dog.SetPosition({rand_pos(generator), static_cast<double>(road.GetStart().y) });
-        }
-        else {
-            std::uniform_real_distribution rand_pos{ static_cast<double>(road.GetStart().y), static_cast<double>(road.GetEnd().y) };
-            dog.SetPosition({ static_cast<double>(road.GetStart().x), rand_pos(generator) });
-        }
-    }
-    else {
+
+        auto set_position = [&](const model::Road& road) {
+            if (road.IsHorizontal()) {
+                std::uniform_real_distribution rand_pos{
+                    static_cast<double>(road.GetStart().x),
+                    static_cast<double>(road.GetEnd().x)
+                };
+                dog.SetPosition({ rand_pos(generator), static_cast<double>(road.GetStart().y) });
+            } else {
+                std::uniform_real_distribution rand_pos{
+                    static_cast<double>(road.GetStart().y),
+                    static_cast<double>(road.GetEnd().y)
+                };
+                dog.SetPosition({ static_cast<double>(road.GetStart().x), rand_pos(generator) });
+            }
+        };
+
+        set_position(road);
+    } else {
         const auto& road_start = roads[0].GetStart();
         dog.SetPosition({ static_cast<double>(road_start.x), static_cast<double>(road_start.y) });
     }
+
     dog.ResetDirection();
     dog.Stop();
     dogs_.push_front(std::move(dog));
