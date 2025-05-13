@@ -59,9 +59,8 @@ public:
         http::response<http::string_body> response(status, 11);
         response.insert(http::field::cache_control, "no-cache");
         response.insert(http::field::content_type, type);
-        if (!is_head_method) {
+        if (!is_head_method)
             response.body() = body;
-        }
         send(response);
     }
 
@@ -70,9 +69,8 @@ public:
         http::response<http::string_body> response(status, 11);
         response.insert(http::field::content_type, MimeType::APP_JSON);
         response.insert(http::field::cache_control, "no-cache");
-        if (!is_head_method) {
+        if (!is_head_method)
             response.body() = body;
-        }
         response.prepare_payload();
         send(response);
     }

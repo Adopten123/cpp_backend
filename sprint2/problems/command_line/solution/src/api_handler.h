@@ -230,40 +230,74 @@ private:
         json::object json_body;
         try {
             json_body = json::parse(body.data()).as_object();
+        } catch (...) {
+            HttpResponseFactory::HandleAPIResponse(
+                http::status::bad_request,
+                RequestHttpBody::JOIN_GAME_PARSE_ERROR,
+                std::move(send)
+            );
+            return {http::status::bad_request, MimeType::APP_JSON};
         }
-        catch (...) {
-            HttpResponseFactory::HandleAPIResponse(http::status::bad_request, RequestHttpBody::JOIN_GAME_PARSE_ERROR, std::move(send));
-            return { http::status::bad_request, MimeType::APP_JSON };
+
+        const auto validate_field = [&json_body](boost::json::string_view field) {
+            return !json_body.contains(field) || !json_body.at(field).is_string();
+        };
+
+        if (validate_field("userName")) {
+            HttpResponseFactory::HandleAPIResponse(
+                http::status::bad_request,
+                RequestHttpBody::JOIN_GAME_PARSE_ERROR,
+                std::move(send)
+            );
+            return {http::status::bad_request, MimeType::APP_JSON};
         }
-        if (!json_body.contains("userName") || !json_body.at("userName").is_string()) {
-            HttpResponseFactory::HandleAPIResponse(http::status::bad_request, RequestHttpBody::JOIN_GAME_PARSE_ERROR, std::move(send));
-            return { http::status::bad_request, MimeType::APP_JSON };
+
+        const auto user_name = json_body.at("userName").get_string();
+        if (user_name.empty()) {
+            HttpResponseFactory::HandleAPIResponse(
+                http::status::bad_request,
+                RequestHttpBody::INVALID_NAME,
+                std::move(send)
+            );
+            return {http::status::bad_request, MimeType::APP_JSON};
         }
-        auto user_name = json_body.at("userName").get_string();
-        if (user_name.size() == 0) {
-            HttpResponseFactory::HandleAPIResponse(http::status::bad_request, RequestHttpBody::INVALID_NAME, std::move(send));
-            return { http::status::bad_request, MimeType::APP_JSON };
+
+        if (validate_field("mapId")) {
+            HttpResponseFactory::HandleAPIResponse(
+                http::status::bad_request,
+                RequestHttpBody::JOIN_GAME_PARSE_ERROR,
+                std::move(send)
+            );
+            return {http::status::bad_request, MimeType::APP_JSON};
         }
-        if (!json_body.contains("mapId") || !json_body.at("mapId").is_string()) {
-            HttpResponseFactory::HandleAPIResponse(http::status::bad_request, RequestHttpBody::JOIN_GAME_PARSE_ERROR, std::move(send));
-            return { http::status::bad_request, MimeType::APP_JSON };
-        }
-        auto map_id = json_body.at("mapId").get_string();
-        auto id = model::Map::Id(map_id.data());
+
+        const auto map_id = json_body.at("mapId").get_string();
+        const model::Map::Id id{map_id.data()};
         auto* session = app_.FindSession(id);
+
         if (!session) {
-            HttpResponseFactory::HandleAPIResponse(http::status::not_found, RequestHttpBody::MAP_NOT_FOUND, std::move(send));
-            return { http::status::not_found, MimeType::APP_JSON };
+            HttpResponseFactory::HandleAPIResponse(
+                http::status::not_found,
+                RequestHttpBody::MAP_NOT_FOUND,
+                std::move(send)
+            );
+            return {http::status::not_found, MimeType::APP_JSON};
         }
-        model::Dog dog{ std::move(std::string(user_name.data())) };
+
+        model::Dog dog{std::string{user_name.data()}};
         auto& player = app_.AddPlayer(std::move(dog), session);
+
         json::object result;
         app::Token token = player.GetToken();
-        std::string tokenStr = *token;
-        result["authToken"] = tokenStr;
+        result["authToken"] = std::string{*token};
         result["playerId"] = player.GetId();
-        HttpResponseFactory::HandleAPIResponse(http::status::ok, json::serialize(result), std::move(send));
-        return { http::status::ok, MimeType::APP_JSON };
+
+        HttpResponseFactory::HandleAPIResponse(
+            http::status::ok,
+            json::serialize(result),
+            std::move(send)
+        );
+        return {http::status::ok, MimeType::APP_JSON};
     }
 
     template<typename Send>
