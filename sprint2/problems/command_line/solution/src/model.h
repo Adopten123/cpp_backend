@@ -42,13 +42,11 @@ struct ModelLiterals {
 
 struct Position {
     double x, y;
-
     auto operator<=>(const Position&) const = default;
 };
 
 struct Speed {
     double vx, vy;
-
     auto operator<=>(const Speed&) const = default;
 };
 
@@ -61,7 +59,6 @@ enum Direction {
 
 struct Point {
     Coord x, y;
-
     bool operator==(const Point& other) const = default;
 };
 
@@ -107,22 +104,11 @@ public:
         , end_{start.x, end_y} {
     }
 
-    bool IsHorizontal() const noexcept {
-        return start_.y == end_.y;
-    }
+    bool IsHorizontal() const noexcept { return start_.y == end_.y; }
+    bool IsVertical() const noexcept { return start_.x == end_.x; }
 
-    bool IsVertical() const noexcept {
-        return start_.x == end_.x;
-    }
-
-    Point GetStart() const noexcept {
-        return start_;
-    }
-
-    Point GetEnd() const noexcept {
-        return end_;
-    }
-
+    Point GetStart() const noexcept { return start_; }
+    Point GetEnd() const noexcept { return end_; }
 private:
     Point start_;
     Point end_;
@@ -134,9 +120,8 @@ public:
         : bounds_{bounds} {
     }
 
-    const Rectangle& GetBounds() const noexcept {
-        return bounds_;
-    }
+    //--------------------getters--------------------------------------
+    const Rectangle& GetBounds() const noexcept { return bounds_; }
 
 private:
     Rectangle bounds_;
@@ -152,17 +137,10 @@ public:
         , offset_{offset} {
     }
 
-    const Id& GetId() const noexcept {
-        return id_;
-    }
-
-    Point GetPosition() const noexcept {
-        return position_;
-    }
-
-    Offset GetOffset() const noexcept {
-        return offset_;
-    }
+    //--------------------getters--------------------------------------
+    const Id& GetId() const noexcept { return id_; }
+    Point GetPosition() const noexcept { return position_; }
+    Offset GetOffset() const noexcept { return offset_; }
 
 private:
     Id id_;
@@ -182,46 +160,22 @@ public:
         , name_(std::move(name)) {
     }
 
-    const Id& GetId() const noexcept {
-        return id_;
-    }
+    //--------------------getters--------------------------------------
+    const Id& GetId() const noexcept { return id_; }
+    const std::string& GetName() const noexcept { return name_; }
+    const Buildings& GetBuildings() const noexcept { return buildings_; }
+    const Roads& GetRoads() const noexcept { return roads_; }
+    const Offices& GetOffices() const noexcept { return offices_; }
 
-    const std::string& GetName() const noexcept {
-        return name_;
-    }
+    void SetSpeed(double speed) { speed_ = speed; }
+    double GetSpeed() { return speed_; }
 
-    const Buildings& GetBuildings() const noexcept {
-        return buildings_;
-    }
-
-    const Roads& GetRoads() const noexcept {
-        return roads_;
-    }
-
-    const Offices& GetOffices() const noexcept {
-        return offices_;
-    }
-
-    void SetSpeed(double speed) {
-        speed_ = speed;
-    }
-
-    double GetSpeed() {
-        return speed_;
-    }
-
-    void AddRoad(const Road& road) {
-        roads_.emplace_back(road);
-    }
-
-    void AddBuilding(const Building& building) {
-        buildings_.emplace_back(building);
-    }
-
+    void AddRoad(const Road& road) { roads_.emplace_back(road); }
+    void AddBuilding(const Building& building) { buildings_.emplace_back(building); }
     void AddOffice(Office office);
 
 private:
-    using OfficeIdToIndex = std::unordered_map<Office::Id, size_t, util::TaggedHasher<Office::Id>>;
+    using OfficeIdByIndex = std::unordered_map<Office::Id, size_t, util::TaggedHasher<Office::Id>>;
 
     Id id_;
     std::string name_;
@@ -229,38 +183,26 @@ private:
     Buildings buildings_;
     double speed_;
 
-    OfficeIdToIndex warehouse_id_to_index_;
+    OfficeIdByIndex warehouse_id_by_index_;
     Offices offices_;
 };
 
 class Dog {
 public:
-    explicit Dog(std::string&& name) : id_(GetNextId()), name_(std::move(name)) {
+    explicit Dog(std::string&& name)
+      : id_(GetNextId())
+      , name_(std::move(name)) {
     }
 
-    int GetId() const {
-        return id_;
-    }
+    //--------------------getters--------------------------------------
+    int GetId() const { return id_; }
+    const std::string& GetName() const { return name_; }
 
-    const std::string& GetName() const {
-        return name_;
-    }
+    Position GetPosition() const { return position_; }
+    Direction GetDirection() const { return direction_; }
+    Speed GetSpeed() const { return speed_; }
 
-    Position GetPosition() const {
-        return position_;
-    }
-
-    Direction GetDirection() const {
-        return direction_;
-    }
-
-    Speed GetSpeed() const {
-        return speed_;
-    }
-
-    void SetPosition(Position pos) {
-        position_ = pos;
-    }
+    void SetPosition(Position pos) { position_ = pos; }
 
     void Move(Direction dir, double speed) {
         direction_ = dir;
@@ -307,21 +249,17 @@ public:
     explicit GameSession(Map* map, bool randomize_spawn);
 
     std::vector<const Dog*> GetDogs() const;
-
     Dog* AddDog(Dog&& dog);
 
-    double GetSpeed() const {
-        return map_->GetSpeed();
-    }
+    double GetSpeed() const { return map_->GetSpeed(); }
 
     void Tick(unsigned delta) {
         for (auto& dog : dogs_) {
             if (dog.GetSpeed() != Speed{}) {
                 auto [stop, new_pos] = CalculateMove(dog.GetPosition(), dog.GetSpeed(), delta);
                 dog.SetPosition(new_pos);
-                if (stop) {
+                if (stop)
                     dog.Stop();
-                }
             }
         }
     }
@@ -341,44 +279,38 @@ public:
 
     void AddMap(Map map);
 
-    const Maps& GetMaps() const noexcept {
-        return maps_;
-    }
+    const Maps& GetMaps() const noexcept { return maps_; }
 
     const Map* FindMap(const Map::Id& id) const noexcept {
-        if (auto it = map_id_to_index_.find(id); it != map_id_to_index_.end()) {
+        if (auto it = map_id_by_index_.find(id); it != map_id_by_index_.end())
             return &maps_.at(it->second);
-        }
         return nullptr;
     }
 
     GameSession* FindSession(const Map::Id& id) {
-        if (auto it = map_id_to_index_.find(id); it != map_id_to_index_.end()) {
+        if (auto it = map_id_by_index_.find(id); it != map_id_by_index_.end())
             return &sessions_.at(it->second);
-        }
         return nullptr;
     }
 
     void StartSessions(bool randomize_spawn) {
         sessions_.clear();
         sessions_.reserve(maps_.size());
-        for (auto& map : maps_) {
+        for (auto& map : maps_)
             sessions_.push_back(GameSession{ &map, randomize_spawn });
-        }
     }
 
     void Tick(unsigned delta) {
-        for (auto& session : sessions_) {
+        for (auto& session : sessions_)
             session.Tick(delta);
-        }
     }
 
 private:
-    using MapIdHasher = util::TaggedHasher<Map::Id>;
-    using MapIdToIndex = std::unordered_map<Map::Id, size_t, MapIdHasher>;
+    using Hasher = util::TaggedHasher<Map::Id>;
+    using MapIdByIndex = std::unordered_map<Map::Id, size_t, Hasher>;
 
     std::vector<Map> maps_;
-    MapIdToIndex map_id_to_index_;
+    MapIdByIndex map_id_by_index_;
     std::vector<GameSession> sessions_;
 };
 

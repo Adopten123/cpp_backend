@@ -28,28 +28,32 @@ public:
         http::response<http::file_body> res;
         res.version(11);
         res.result(http::status::ok);
+
         std::string full_path = root_path.string() + path.data();
-        std::size_t ext_start = path.find_last_of('.', path.size());
         std::string_view type = MimeType::TEXT_HTML;
-        if (ext_start != path.npos) {
-            type = utils::GetMimeType(path.substr(ext_start + 1, path.size() - ext_start + 1));
-            res.insert(http::field::content_type, type);
-        }
-        else {
+
+        std::size_t ext_pos = path.find_last_of('.');
+        if (ext_pos != std::string_view::npos) {
+            type = utils::GetMimeType(path.substr(ext_pos + 1));
+        } else {
             full_path = root_path.string() + "/index.html";
-            res.insert(http::field::content_type, MimeType::TEXT_HTML);
         }
+
+        res.set(http::field::content_type, type);
 
         http::file_body::value_type file;
+        sys::error_code ec;
+        file.open(full_path.c_str(), beast::file_mode::read, ec);
 
-        if (sys::error_code ec; file.open(full_path.data(), beast::file_mode::read, ec), ec) {
-            HandleResponse(http::status::not_found, RequestHttpBody::FILE_NOT_FOUND, std::move(send), MimeType::TEXT_PLAIN, is_head_method);
-            return { http::status::not_found , MimeType::TEXT_PLAIN };
+        if (ec) {
+            HandleResponse(http::status::not_found, RequestHttpBody::FILE_NOT_FOUND, std::forward<Send>(send), MimeType::TEXT_PLAIN, is_head_method);
+            return { http::status::not_found, MimeType::TEXT_PLAIN };
         }
 
         if (!is_head_method) {
             res.body() = std::move(file);
         }
+
         res.prepare_payload();
         send(res);
         return { http::status::ok, type };
@@ -110,9 +114,8 @@ public:
     	const std::string_view http_method = req.method_string();
     	const auto http_version = req.version();
 
-    	if (path_segments.size() < 3) {
+    	if (path_segments.size() < 3)
         	return HttpResponseFactory::HandleBadRequest(std::forward<Send>(send));
-    	}
 
     	const auto& resource = path_segments[2];
 
@@ -135,9 +138,9 @@ public:
     	}
 
     	if (resource == RestApiLiteral::MAP) {
-        	if (path_segments.size() != 4) {
+        	if (path_segments.size() != 4)
             	return HttpResponseFactory::HandleBadRequest(std::forward<Send>(send));
-        	}
+
         	return HandleMapRequest(
             	std::string(path_segments[3]),
            	 	std::forward<Send>(send)
@@ -145,9 +148,8 @@ public:
     	}
 
     	if (resource == RestApiLiteral::GAME) {
-        	if (path_segments.size() < 4) {
+        	if (path_segments.size() < 4)
             	return HttpResponseFactory::HandleBadRequest(std::forward<Send>(send));
-        	}
 
         	const auto& action = path_segments[3];
 
@@ -264,9 +266,8 @@ public:
         	}
 
         	if (action == RestApiLiteral::TICK) {
-            	if (auto_tick_) {
+            	if (auto_tick_)
                 	return HttpResponseFactory::HandleBadRequest(std::forward<Send>(send));
-            	}
 
             	if (http_method != "POST") {
                 	return HttpResponseFactory::HandleMethodNotAllowed(
@@ -282,10 +283,7 @@ public:
     	return HttpResponseFactory::HandleBadRequest(std::forward<Send>(send));
 	}
 
-    Strand& GetStrand() {
-        return strand_;
-    }
-
+    Strand& GetStrand() { return strand_; }
 private:
     app::Application& app_;
     Strand strand_;

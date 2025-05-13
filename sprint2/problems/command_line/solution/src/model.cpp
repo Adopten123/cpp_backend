@@ -9,14 +9,14 @@ using namespace std::literals;
 static const double MAX_DELTA = 0.4;
 
 void Map::AddOffice(Office office) {
-    if (warehouse_id_to_index_.contains(office.GetId())) {
+    if (warehouse_id_by_index_.contains(office.GetId())) {
         throw std::invalid_argument("Duplicate warehouse");
     }
 
     const size_t index = offices_.size();
     Office& o = offices_.emplace_back(std::move(office));
     try {
-        warehouse_id_to_index_.emplace(o.GetId(), index);
+        warehouse_id_by_index_.emplace(o.GetId(), index);
     } catch (std::exception& ex) {
         // Удаляем офис из вектора, если не удалось вставить в unordered_map
         offices_.pop_back();
@@ -26,13 +26,13 @@ void Map::AddOffice(Office office) {
 
 void Game::AddMap(Map map) {
     const size_t index = maps_.size();
-    if (auto [it, inserted] = map_id_to_index_.emplace(map.GetId(), index); !inserted) {
+    if (auto [it, inserted] = map_id_by_index_.emplace(map.GetId(), index); !inserted) {
         throw std::invalid_argument("Map with id "s + *map.GetId() + " already exists"s);
     } else {
         try {
             maps_.emplace_back(std::move(map));
         } catch (std::exception& ex) {
-            map_id_to_index_.erase(it);
+            map_id_by_index_.erase(it);
             throw;
         }
     }
@@ -40,9 +40,9 @@ void Game::AddMap(Map map) {
 
 std::vector<const Dog*> GameSession::GetDogs() const {
     std::vector<const Dog*> result;
-    for (const auto& dog : dogs_) {
+
+    for (const auto& dog : dogs_)
         result.emplace_back(&dog);
-    }
     return result;
 }
 
@@ -57,13 +57,13 @@ Dog* GameSession::AddDog(Dog&& dog) {
 
         auto set_position = [&](const model::Road& road) {
             if (road.IsHorizontal()) {
-                std::uniform_real_distribution rand_pos{
+                std::uniform_real_distribution rand_pos {
                     static_cast<double>(road.GetStart().x),
                     static_cast<double>(road.GetEnd().x)
                 };
                 dog.SetPosition({ rand_pos(generator), static_cast<double>(road.GetStart().y) });
             } else {
-                std::uniform_real_distribution rand_pos{
+                std::uniform_real_distribution rand_pos {
                     static_cast<double>(road.GetStart().y),
                     static_cast<double>(road.GetEnd().y)
                 };
@@ -95,21 +95,19 @@ GameSession::GameSession(Map* map, bool randomize_spawn)
             int start_x = std::min(start.x, end.x);
             int end_x = std::max(start.x, end.x);
 
-            for (int x = start_x; x <= end_x; ++x) {
+            for (int x = start_x; x <= end_x; ++x)
                 roads_graph_[{x, start.y}].push_back(&road);
-            }
         } else {
             int start_y = std::min(start.y, end.y);
             int end_y = std::max(start.y, end.y);
 
-            for (int y = start_y; y <= end_y; ++y) {
+            for (int y = start_y; y <= end_y; ++y)
                 roads_graph_[{start.x, y}].push_back(&road);
-            }
         }
     }
 }
 
-bool InBounds(const Road* road, Position pos) {
+bool IsPositionNearRoad(const Road* road, Position pos) {
     auto start_point = road->GetStart();
     auto end_point = road->GetEnd();
 
@@ -164,9 +162,8 @@ std::pair<bool, Position> GameSession::CalculateMove(Position pos, Speed speed, 
     const auto& roads = roads_graph_.at(rounded);
 
     for (const auto* road : roads) {
-        if (InBounds(road, end_pos)) {
+        if (IsPositionNearRoad(road, end_pos))
             return {false, end_pos};
-        }
 
         if (road->IsHorizontal() && speed.vy == 0.0) {
             double max_x = (speed.vx > 0)
