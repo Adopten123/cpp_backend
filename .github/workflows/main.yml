@@ -99,7 +99,7 @@ jobs:
           pip install -U conan==1.59.0
           cp -R /home/forconan/.conan /github/home/.conan
 
-            - name: run tests sprint2 static_content
+      - name: run tests sprint2 static_content
         run: |
           cd cpp-backend-tests-practicum/scripts/sprint2
           ./static_content/run.sh
