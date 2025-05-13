@@ -361,54 +361,67 @@ private:
     }
 
     template<typename Send>
-    ResponseData HandleActionRequest(std::string&& token, std::string_view body, Send&& send) {
-        auto* player = app_.FindByToken(app::Token(token));
-        if (!player) {
-            HttpResponseFactory::HandleAPIResponse(http::status::unauthorized, RequestHttpBody::TOKEN_UNKNOWN, std::move(send));
-            return { http::status::unauthorized, MimeType::APP_JSON };
-        }
-        json::object json_body;
-        try {
-            json_body = json::parse(body.data()).as_object();
-        }
-        catch (...) {
-            HttpResponseFactory::HandleAPIResponse(http::status::bad_request, RequestHttpBody::ACTION_PARSE_ERROR, std::move(send));
-            return { http::status::bad_request, MimeType::APP_JSON };
-        }
-        auto move = json_body.find("move");
-        if (move == json_body.end() || !move->value().is_string()) {
-            HttpResponseFactory::HandleAPIResponse(http::status::bad_request, RequestHttpBody::ACTION_PARSE_ERROR, std::move(send));
-            return { http::status::bad_request, MimeType::APP_JSON };
-        }
-        std::string_view move_value = move->value().get_string();
-        if (move_value == "U") {
-            app_.Move(player, model::Direction::NORTH);
-            HttpResponseFactory::HandleAPIResponse(http::status::ok, "{}"sv, std::move(send));
-            return { http::status::ok, MimeType::APP_JSON };
-        }
-        if (move_value == "D") {
-            app_.Move(player, model::Direction::SOUTH);
-            HttpResponseFactory::HandleAPIResponse(http::status::ok, "{}"sv, std::move(send));
-            return { http::status::ok, MimeType::APP_JSON };
-        }
-        if (move_value == "L") {
-            app_.Move(player, model::Direction::WEST);
-            HttpResponseFactory::HandleAPIResponse(http::status::ok, "{}"sv, std::move(send));
-            return { http::status::ok, MimeType::APP_JSON };
-        }
-        if (move_value == "R") {
-            app_.Move(player, model::Direction::EAST);
-            HttpResponseFactory::HandleAPIResponse(http::status::ok, "{}"sv, std::move(send));
-            return { http::status::ok, MimeType::APP_JSON };
-        }
-        if (move_value == "") {
-            app_.Stop(player);
-            HttpResponseFactory::HandleAPIResponse(http::status::ok, "{}"sv, std::move(send));
-            return { http::status::ok, MimeType::APP_JSON };
-        }
-        HttpResponseFactory::HandleAPIResponse(http::status::bad_request, RequestHttpBody::ACTION_PARSE_ERROR, std::move(send));
-        return { http::status::bad_request, MimeType::APP_JSON };
+ResponseData HandleActionRequest(std::string&& token, std::string_view body, Send&& send) {
+    auto* player = app_.FindByToken(app::Token(std::move(token)));
+    if (!player) {
+        HttpResponseFactory::HandleAPIResponse(
+            http::status::unauthorized,
+            RequestHttpBody::TOKEN_UNKNOWN,
+            std::move(send)
+        );
+        return {http::status::unauthorized, MimeType::APP_JSON};
     }
+
+    json::object json_body;
+    try {
+        json_body = json::parse(body.data()).as_object();
+    } catch (...) {
+        HttpResponseFactory::HandleAPIResponse(
+            http::status::bad_request,
+            RequestHttpBody::ACTION_PARSE_ERROR,
+            std::move(send)
+        );
+        return {http::status::bad_request, MimeType::APP_JSON};
+    }
+
+    const auto move_it = json_body.find("move");
+    if (move_it == json_body.end() || !move_it->value().is_string()) {
+        HttpResponseFactory::HandleAPIResponse(
+            http::status::bad_request,
+            RequestHttpBody::ACTION_PARSE_ERROR,
+            std::move(send)
+        );
+        return {http::status::bad_request, MimeType::APP_JSON};
+    }
+
+    const std::string_view move_value = move_it->value().get_string().c_str();
+
+    if (move_value == "U") {
+        app_.Move(player, model::Direction::NORTH);
+    } else if (move_value == "D") {
+        app_.Move(player, model::Direction::SOUTH);
+    } else if (move_value == "L") {
+        app_.Move(player, model::Direction::WEST);
+    } else if (move_value == "R") {
+        app_.Move(player, model::Direction::EAST);
+    } else if (move_value.empty()) {
+        app_.Stop(player);
+    } else {
+        HttpResponseFactory::HandleAPIResponse(
+            http::status::bad_request,
+            RequestHttpBody::ACTION_PARSE_ERROR,
+            std::move(send)
+        );
+        return {http::status::bad_request, MimeType::APP_JSON};
+    }
+
+    HttpResponseFactory::HandleAPIResponse(
+        http::status::ok,
+        "{}"sv,
+        std::move(send)
+    );
+    return {http::status::ok, MimeType::APP_JSON};
+}
 
     template<typename Send>
     ResponseData HandleTickRequest(std::string_view body, Send&& send) {
