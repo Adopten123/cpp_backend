@@ -84,38 +84,26 @@ Dog* GameSession::AddDog(Dog&& dog) {
 }
 
 GameSession::GameSession(Map* map, bool randomize_spawn)
-        : map_(map),
-        randomize_spawn_(randomize_spawn)
+    : map_(map)
+    , randomize_spawn_(randomize_spawn)
 {
     for (const auto& road : map_->GetRoads()) {
         auto start = road.GetStart();
         auto end = road.GetEnd();
+
         if (road.IsHorizontal()) {
-            int start_x, end_x;
-            if (start.x < end.x) {
-                start_x = start.x;
-                end_x = end.x;
+            int start_x = std::min(start.x, end.x);
+            int end_x = std::max(start.x, end.x);
+
+            for (int x = start_x; x <= end_x; ++x) {
+                roads_graph_[{x, start.y}].push_back(&road);
             }
-            else {
-                start_x = end.x;
-                end_x = start.x;
-            }
-            for (; start_x <= end_x; ++start_x) {
-                roads_graph_[{start_x, start.y}].push_back(&road);
-            }
-        }
-        else {
-            int start_y, end_y;
-            if (start.y < end.y) {
-                start_y = start.y;
-                end_y = end.y;
-            }
-            else {
-                start_y = end.y;
-                end_y = start.y;
-            }
-            for (; start_y <= end_y; ++start_y) {
-                roads_graph_[{start.x, start_y}].push_back(&road);
+        } else {
+            int start_y = std::min(start.y, end.y);
+            int end_y = std::max(start.y, end.y);
+
+            for (int y = start_y; y <= end_y; ++y) {
+                roads_graph_[{start.x, y}].push_back(&road);
             }
         }
     }
@@ -124,38 +112,26 @@ GameSession::GameSession(Map* map, bool randomize_spawn)
 bool InBounds(const Road* road, Position pos) {
     auto start_point = road->GetStart();
     auto end_point = road->GetEnd();
-    double max_x;
-    double min_x;
-    double max_y;
-    double min_y;
+
+    double min_x, max_x;
+    double min_y, max_y;
+
     if (road->IsHorizontal()) {
-        if (start_point.x < end_point.x) {
-            min_x = static_cast<double>(start_point.x) - MAX_DELTA;
-            max_x = static_cast<double>(end_point.x) + MAX_DELTA;
-        }
-        else {
-            min_x = static_cast<double>(end_point.x) - MAX_DELTA;
-            max_x = static_cast<double>(start_point.x) + MAX_DELTA;
-        }
-        min_y = static_cast<double>(start_point.y) - MAX_DELTA;
-        max_y = static_cast<double>(start_point.y) + MAX_DELTA;
+        min_x = std::min(start_point.x, end_point.x) - MAX_DELTA;
+        max_x = std::max(start_point.x, end_point.x) + MAX_DELTA;
+        min_y = max_y = static_cast<double>(start_point.y);
+        min_y -= MAX_DELTA;
+        max_y += MAX_DELTA;
+    } else {
+        min_y = std::min(start_point.y, end_point.y) - MAX_DELTA;
+        max_y = std::max(start_point.y, end_point.y) + MAX_DELTA;
+        min_x = max_x = static_cast<double>(start_point.x);
+        min_x -= MAX_DELTA;
+        max_x += MAX_DELTA;
     }
-    else {
-        if (start_point.y < end_point.y) {
-            min_y = static_cast<double>(start_point.y) - MAX_DELTA;
-            max_y = static_cast<double>(end_point.y) + MAX_DELTA;
-        }
-        else {
-            min_y = static_cast<double>(end_point.y) - MAX_DELTA;
-            max_y = static_cast<double>(start_point.y) + MAX_DELTA;
-        }
-        min_x = static_cast<double>(start_point.x) - MAX_DELTA;
-        max_x = static_cast<double>(start_point.x) + MAX_DELTA;
-    }
-    if (pos.x <= max_x && pos.x >= min_x && pos.y <= max_y && pos.y >= min_y) {
-        return true;
-    }
-    return false;
+
+    return pos.x >= min_x && pos.x <= max_x &&
+           pos.y >= min_y && pos.y <= max_y;
 }
 
 double GetMaxPossible(const Road* road, Direction dir) {
@@ -173,32 +149,47 @@ double GetMaxPossible(const Road* road, Direction dir) {
 }
 
 std::pair<bool, Position> GameSession::CalculateMove(Position pos, Speed speed, unsigned delta) const {
-    double in_seconds = static_cast<double>(delta) / 1000;
-    Position end_pos = {pos.x + speed.vx * in_seconds, pos.y + speed.vy * in_seconds };
-    Point rounded = { static_cast<int>(std::round(pos.x)), static_cast<int>(std::round(pos.y)) };
-    for (const auto& road : roads_graph_.at(rounded)) {
+    double in_seconds = static_cast<double>(delta) / 1000.0;
+
+    Position end_pos = {
+        pos.x + speed.vx * in_seconds,
+        pos.y + speed.vy * in_seconds
+    };
+
+    Point rounded = {
+        static_cast<int>(std::round(pos.x)),
+        static_cast<int>(std::round(pos.y))
+    };
+
+    const auto& roads = roads_graph_.at(rounded);
+
+    for (const auto* road : roads) {
         if (InBounds(road, end_pos)) {
             return {false, end_pos};
         }
-        if (road->IsHorizontal() && speed.vy == 0.) {
-            if (speed.vx > 0) {
-                return {true, {GetMaxPossible(road, Direction::EAST), pos.y}};
-            }
-            return {true, {GetMaxPossible(road, Direction::WEST), pos.y}};
+
+        if (road->IsHorizontal() && speed.vy == 0.0) {
+            double max_x = (speed.vx > 0)
+                ? GetMaxPossible(road, Direction::EAST)
+                : GetMaxPossible(road, Direction::WEST);
+            return {true, {max_x, pos.y}};
         }
-        if (road->IsVertical() && speed.vx == 0.) {
-            if (speed.vy > 0) {
-                return {true, {pos.x, GetMaxPossible(road, Direction::SOUTH)}};
-            }
-            return {true, {pos.x, GetMaxPossible(road, Direction::NORTH)}};
+
+        if (road->IsVertical() && speed.vx == 0.0) {
+            double max_y = (speed.vy > 0)
+                ? GetMaxPossible(road, Direction::SOUTH)
+                : GetMaxPossible(road, Direction::NORTH);
+            return {true, {pos.x, max_y}};
         }
     }
-    if (speed.vx == 0) {
-        end_pos = {pos.x, speed.vy > 0 ? std::round(pos.y) + MAX_DELTA : std::round(pos.y) - MAX_DELTA };
-        return {true, end_pos};
+
+    if (speed.vx == 0.0) {
+        double y_limit = std::round(pos.y) + (speed.vy > 0 ? MAX_DELTA : -MAX_DELTA);
+        return {true, {pos.x, y_limit}};
+    } else {
+        double x_limit = std::round(pos.x) + (speed.vx > 0 ? MAX_DELTA : -MAX_DELTA);
+        return {true, {x_limit, pos.y}};
     }
-    end_pos = { speed.vx > 0 ? std::round(pos.x) + MAX_DELTA : std::round(pos.x) - MAX_DELTA, pos.y };
-    return { true, end_pos };
 }
 
 }  // namespace model
