@@ -71,8 +71,6 @@ Dog* GameSession::AddDog(Dog&& dog) {
     return &dogs_.front();
 }
 
-int Dog::start_id_ = 0;
-
 GameSession::GameSession(Map* map, bool randomize_spawn)
         : map_(map),
         randomize_spawn_(randomize_spawn)
@@ -192,44 +190,3 @@ std::pair<bool, Position> GameSession::CalculateMove(Position pos, Speed speed, 
 }
 
 }  // namespace model
-
-namespace app {
-
-Token TokensGen::GetToken() {
-    std::stringstream ss;
-    ss << std::hex << std::setw(16) << std::setfill('0') << generator1_() << std::setw(16) << generator2_();
-    return Token(ss.str());
-}
-
-Player::Player(Token token, model::GameSession* session, model::Dog* dog)
-    : id_(GetNextId()), session_(session), dog_(dog), token_(std::move(token)) {
-}
-
-Player& Players::AddPlayer(model::Dog&& dog, model::GameSession* session) {
-    auto* doggy = session->AddDog(std::move(dog));
-    auto token = token_gen_.GetToken();
-    while (tokens_to_players_.contains(token)) {
-        token = token_gen_.GetToken();
-    }
-    Player player(token, session, doggy);
-    players_.push_back(std::move(player));
-    tokens_to_players_.emplace(token, players_.size() - 1);
-    return players_.back();
-}
-
-Player* Players::FindByToken(const Token& token) {
-    if (auto player = tokens_to_players_.find(token); player != tokens_to_players_.end()) {
-        return &players_.at(player->second);
-    }
-    return nullptr;
-}
-
-int Player::start_id_ = 0;
-
-Application::Application(model::Game&& game, bool randomize_spawn)
-    :game_(std::move(game))
-{
-    game_.StartSessions(randomize_spawn);
-}
-
-}  // namespace app

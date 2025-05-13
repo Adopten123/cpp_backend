@@ -2,6 +2,7 @@
 
 #include "http_server.h"
 #include "model.h"
+#include "player_models.h"
 
 #include <boost/asio/io_context.hpp>
 #include <boost/json.hpp>
