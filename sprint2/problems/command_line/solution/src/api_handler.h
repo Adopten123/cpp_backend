@@ -300,35 +300,34 @@ private:
         return {http::status::ok, MimeType::APP_JSON};
     }
 
-    template<typename Send>
-ResponseData HandlePlayersRequest(std::string&& token, Send&& send) {
-    app::Token auth_token(std::move(token));
-    auto* player = app_.FindByToken(auth_token);
+	template<typename Send>
+	ResponseData HandlePlayersRequest(std::string&& token, Send&& send) {
+    	app::Token player_token(std::move(token));
+    	auto* player = app_.FindByToken(player_token);
 
-    if (player == nullptr) {
-        HttpResponseFactory::HandleAPIResponse(
-            http::status::unauthorized,
-            RequestHttpBody::TOKEN_UNKNOWN,
-            std::forward<Send>(send)
-        );
-        return { http::status::unauthorized, MimeType::APP_JSON };
-    }
+    	if (player == nullptr) {
+        	HttpResponseFactory::HandleAPIResponse(
+            	http::status::unauthorized,
+            	RequestHttpBody::TOKEN_UNKNOWN,
+            	std::forward<Send>(send)
+        	);
+        	return { http::status::unauthorized, MimeType::APP_JSON };
+    	}
 
-    json::object result;
-    const auto* dogs = app_.GetDogs(player);
+    	json::object result;
 
-    for (const auto* dog : dogs) {
-        result[std::to_string(dog->GetId())] = json::array{ "name", dog->GetName() };
-    }
+    	for (const auto* dog : app_.GetDogs(player))
+        	result[std::to_string(dog->GetId())] = json::array{ "name", dog->GetName() };
 
-    HttpResponseFactory::HandleAPIResponse(
-        http::status::ok,
-        json::serialize(result),
-        std::forward<Send>(send)
-    );
+    	HttpResponseFactory::HandleAPIResponse(
+        	http::status::ok,
+        	json::serialize(result),
+        	std::forward<Send>(send)
+    	);
 
-    return { http::status::ok, MimeType::APP_JSON };
-}
+    	return { http::status::ok, MimeType::APP_JSON };
+	}
+
 
 
     template<typename Send>
