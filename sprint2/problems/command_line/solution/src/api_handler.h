@@ -212,18 +212,28 @@ private:
     json::array ProcessMapsRequestBody() const;
 
     template<typename Send>
-    ResponseData HandleMapRequest(std::string id, Send&& send) {
-        model::Map::Id map_id(id);
-        const auto* map = app_.FindMap(map_id);
-        if (map) {
-            HttpResponseFactory::HandleAPIResponse(http::status::ok, json::serialize(utils::MapToJson(map)), std::move(send));
-            return { http::status::ok , MimeType::APP_JSON };
-        }
-        else {
-            HttpResponseFactory::HandleAPIResponse(http::status::not_found, RequestHttpBody::MAP_NOT_FOUND, std::move(send));
-            return { http::status::not_found , MimeType::APP_JSON };
-        }
-    }
+	ResponseData HandleMapRequest(std::string id, Send&& send) {
+    	model::Map::Id map_id(std::move(id));
+    	const auto* map = app_.FindMap(map_id);
+
+    	if (map != nullptr) {
+        	const auto response_body = json::serialize(utils::MapToJson(map));
+        	HttpResponseFactory::HandleAPIResponse(
+            	http::status::ok,
+            	response_body,
+            	std::forward<Send>(send)
+        	);
+        	return { http::status::ok, MimeType::APP_JSON };
+    	}
+
+    	HttpResponseFactory::HandleAPIResponse(
+        	http::status::not_found,
+        	RequestHttpBody::MAP_NOT_FOUND,
+        	std::forward<Send>(send)
+    	);
+    	return { http::status::not_found, MimeType::APP_JSON };
+	}
+
 
     template<typename Send>
     ResponseData HandleJoinRequest(std::string_view body, Send&& send) {
