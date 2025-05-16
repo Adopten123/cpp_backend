@@ -434,29 +434,52 @@ private:
 	}
 
     template<typename Send>
-    ResponseData HandleTickRequest(std::string_view body, Send&& send) {
-        json::object json_body;
-        try {
-            json_body = json::parse(body.data()).as_object();
-        }
-        catch (...) {
-            HttpResponseFactory::HandleAPIResponse(http::status::bad_request, RequestHttpBody::TICK_PARSE_ERROR, std::move(send));
-            return { http::status::bad_request, MimeType::APP_JSON };
-        }
-        auto tick = json_body.find("timeDelta");
-        if (tick == json_body.end() || !tick->value().is_int64()) {
-            HttpResponseFactory::HandleAPIResponse(http::status::bad_request, RequestHttpBody::TICK_PARSE_ERROR, std::move(send));
-            return { http::status::bad_request, MimeType::APP_JSON };
-        }
-        int tick_val = (int)tick->value().get_int64();
-        if (tick_val < 1) {
-            HttpResponseFactory::HandleAPIResponse(http::status::bad_request, RequestHttpBody::TICK_PARSE_ERROR, std::move(send));
-            return { http::status::bad_request, MimeType::APP_JSON };
-        }
-        app_.Tick(tick_val);
-        HttpResponseFactory::HandleAPIResponse(http::status::ok, "{}"sv, std::move(send));
-        return { http::status::ok, MimeType::APP_JSON };
-    }
+	ResponseData HandleTickRequest(std::string_view body, Send&& send) {
+    	json::object json_body;
+
+    	try {
+        	json_body = json::parse(body.data()).as_object();
+    	} catch (...) {
+        	HttpResponseFactory::HandleAPIResponse(
+            	http::status::bad_request,
+            	RequestHttpBody::TICK_PARSE_ERROR,
+            	std::forward<Send>(send)
+        	);
+        	return { http::status::bad_request, MimeType::APP_JSON };
+    	}
+
+    	auto tick = json_body.find("timeDelta");
+
+    	if (tick == json_body.end() || !tick->value().is_int64()) {
+        	HttpResponseFactory::HandleAPIResponse(
+            	http::status::bad_request,
+            	RequestHttpBody::TICK_PARSE_ERROR,
+            	std::forward<Send>(send)
+        	);
+        	return { http::status::bad_request, MimeType::APP_JSON };
+    	}
+
+    	int tick_val = static_cast<int>(tick->value().get_int64());
+
+    	if (tick_val < 1) {
+        	HttpResponseFactory::HandleAPIResponse(
+            	http::status::bad_request,
+            	RequestHttpBody::TICK_PARSE_ERROR,
+            	std::forward<Send>(send)
+        	);
+        	return { http::status::bad_request, MimeType::APP_JSON };
+    	}
+
+    	app_.Tick(tick_val);
+
+    	HttpResponseFactory::HandleAPIResponse(
+        	http::status::ok,
+        	"{}"sv,
+        	std::forward<Send>(send)
+    	);
+
+    	return { http::status::ok, MimeType::APP_JSON };
+	}
 
     bool ParseBearer(const std::string_view auth_header, std::string& token_to_write) const;
 };
