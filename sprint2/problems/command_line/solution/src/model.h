@@ -1,4 +1,5 @@
 #pragma once
+
 #include <compare>
 #include <forward_list>
 #include <iomanip>

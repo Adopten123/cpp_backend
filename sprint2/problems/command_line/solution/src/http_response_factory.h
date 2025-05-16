@@ -15,7 +15,14 @@ public:
 
     template<typename Send>
     static ResponseData HandleBadRequest(Send&& send, bool is_head_method = false) {
-        HandleResponse(http::status::bad_request, RequestHttpBody::BAD_REQUEST, std::move(send), MimeType::APP_JSON, is_head_method);
+        HandleResponse(
+            http::status::bad_request,
+            RequestHttpBody::BAD_REQUEST,
+            std::move(send),
+            MimeType::APP_JSON,
+            is_head_method
+        );
+
         return { http::status::bad_request, MimeType::APP_JSON };
     }
 
@@ -57,8 +64,10 @@ public:
     template<typename Send>
     static void HandleResponse(http::status status, std::string_view body, Send&& send, std::string_view type, bool is_head_method = false) {
         http::response<http::string_body> response(status, 11);
+
         response.insert(http::field::cache_control, "no-cache");
         response.insert(http::field::content_type, type);
+
         if (!is_head_method)
             response.body() = body;
         send(response);
@@ -67,10 +76,13 @@ public:
     template<typename Send>
     static void HandleAPIResponse(http::status status, std::string_view body, Send&& send, bool is_head_method = false) {
         http::response<http::string_body> response(status, 11);
+
         response.insert(http::field::content_type, MimeType::APP_JSON);
         response.insert(http::field::cache_control, "no-cache");
+
         if (!is_head_method)
             response.body() = body;
+
         response.prepare_payload();
         send(response);
     }
@@ -78,9 +90,11 @@ public:
     template<typename Send>
     static ResponseData HandleMethodNotAllowed(Send&& send, std::string_view allow) {
         http::response<http::string_body> response(http::status::method_not_allowed, 11);
+
         response.insert(http::field::content_type, MimeType::APP_JSON);
         response.insert(http::field::cache_control, "no-cache");
         response.insert(http::field::allow, allow);
+
         response.body() = RequestHttpBody::METHOD_NOT_ALLOWED;
         send(response);
         return { http::status::method_not_allowed, MimeType::APP_JSON };

@@ -234,7 +234,6 @@ private:
     	return { http::status::not_found, MimeType::APP_JSON };
 	}
 
-
     template<typename Send>
     ResponseData HandleJoinRequest(std::string_view body, Send&& send) {
         json::object json_body;
